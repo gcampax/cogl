@@ -71,12 +71,6 @@ static void _cogl_renderer_free (CoglRenderer *renderer);
 
 COGL_OBJECT_DEFINE (Renderer, renderer);
 
-typedef struct _CoglNativeFilterClosure
-{
-  CoglNativeFilterFunc func;
-  void *data;
-} CoglNativeFilterClosure;
-
 GQuark
 cogl_renderer_error_quark (void)
 {
@@ -90,12 +84,6 @@ _cogl_renderer_get_winsys (CoglRenderer *renderer)
 }
 
 static void
-native_filter_closure_free (CoglNativeFilterClosure *closure)
-{
-  g_slice_free (CoglNativeFilterClosure, closure);
-}
-
-static void
 _cogl_renderer_free (CoglRenderer *renderer)
 {
   const CoglWinsysVtable *winsys = _cogl_renderer_get_winsys (renderer);
@@ -105,11 +93,6 @@ _cogl_renderer_free (CoglRenderer *renderer)
   if (renderer->libgl_module)
     g_module_close (renderer->libgl_module);
 #endif
-
-  g_slist_foreach (renderer->event_filters,
-                   (GFunc) native_filter_closure_free,
-                   NULL);
-  g_slist_free (renderer->event_filters);
 
   g_free (renderer);
 }
@@ -148,7 +131,6 @@ cogl_renderer_new (void)
   _cogl_init ();
 
   renderer->connected = FALSE;
-  renderer->event_filters = NULL;
 
   return _cogl_renderer_object_new (renderer);
 }
@@ -308,69 +290,6 @@ cogl_renderer_connect (CoglRenderer *renderer, GError **error)
     }
 
   return TRUE;
-}
-
-CoglFilterReturn
-_cogl_renderer_handle_native_event (CoglRenderer *renderer,
-                                    void *event)
-{
-  GSList *l, *next;
-
-  /* Pass the event on to all of the registered filters in turn */
-  for (l = renderer->event_filters; l; l = next)
-    {
-      CoglNativeFilterClosure *closure = l->data;
-
-      /* The next pointer is taken now so that we can handle the
-         closure being removed during emission */
-      next = l->next;
-
-      if (closure->func (event, closure->data) == COGL_FILTER_REMOVE)
-        return COGL_FILTER_REMOVE;
-    }
-
-  /* If the backend for the renderer also wants to see the events, it
-     should just register its own filter */
-
-  return COGL_FILTER_CONTINUE;
-}
-
-void
-_cogl_renderer_add_native_filter (CoglRenderer *renderer,
-                                  CoglNativeFilterFunc func,
-                                  void *data)
-{
-  CoglNativeFilterClosure *closure;
-
-  closure = g_slice_new (CoglNativeFilterClosure);
-  closure->func = func;
-  closure->data = data;
-
-  renderer->event_filters = g_slist_prepend (renderer->event_filters, closure);
-}
-
-void
-_cogl_renderer_remove_native_filter (CoglRenderer *renderer,
-                                     CoglNativeFilterFunc func,
-                                     void *data)
-{
-  GSList *l, *prev = NULL;
-
-  for (l = renderer->event_filters; l; prev = l, l = l->next)
-    {
-      CoglNativeFilterClosure *closure = l->data;
-
-      if (closure->func == func && closure->data == data)
-        {
-          native_filter_closure_free (closure);
-          if (prev)
-            prev->next = g_slist_delete_link (prev->next, l);
-          else
-            renderer->event_filters =
-              g_slist_delete_link (renderer->event_filters, l);
-          break;
-        }
-    }
 }
 
 void

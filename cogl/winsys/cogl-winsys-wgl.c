@@ -147,59 +147,6 @@ _cogl_winsys_renderer_disconnect (CoglRenderer *renderer)
   g_slice_free (CoglRendererWgl, renderer->winsys);
 }
 
-static CoglOnscreen *
-find_onscreen_for_hwnd (CoglContext *context, HWND hwnd)
-{
-  CoglDisplayWgl *display_wgl = context->display->winsys;
-  GList *l;
-
-  for (l = context->framebuffers; l; l = l->next)
-    {
-      CoglFramebuffer *framebuffer = l->data;
-
-      if (framebuffer->type == COGL_FRAMEBUFFER_TYPE_ONSCREEN)
-        {
-          CoglOnscreen *onscreen = COGL_ONSCREEN (framebuffer);
-
-          if (onscreen->hwnd == hwnd)
-            return COGL_ONSCREEN (framebuffer);
-        }
-    }
-
-  return NULL;
-}
-
-static CoglFilterReturn
-win32_event_filter_cb (MSG *msg, void *data)
-{
-  CoglContext *context = data;
-
-  if (msg->message == WM_SIZE)
-    {
-      CoglOnscreen *onscreen =
-        find_onscreen_for_hwnd (context, msg->hwnd);
-
-      if (onscreen)
-        {
-          CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
-
-          /* Ignore size changes resulting from the stage being
-             minimized - otherwise it will think the window has been
-             resized to 0,0 */
-          if (msg->wParam != SIZE_MINIMIZED)
-            {
-              WORD new_width = LOWORD (msg->lParam);
-              WORD new_height = HIWORD (msg->lParam);
-              _cogl_framebuffer_winsys_update_size (framebuffer,
-                                                    new_width,
-                                                    new_height);
-            }
-        }
-    }
-
-  return COGL_FILTER_CONTINUE;
-}
-
 static gboolean
 _cogl_winsys_renderer_connect (CoglRenderer *renderer,
                                GError **error)
@@ -473,20 +420,12 @@ _cogl_winsys_context_init (CoglContext *context, GError **error)
 
   wgl_context = context->winsys = g_new0 (CoglContextWgl, 1);
 
-  cogl_win32_renderer_add_filter (context->display->renderer,
-                                  win32_event_filter_cb,
-                                  context);
-
   return update_winsys_features (context, error);
 }
 
 static void
 _cogl_winsys_context_deinit (CoglContext *context)
 {
-  cogl_win32_renderer_remove_filter (context->display->renderer,
-                                     win32_event_filter_cb,
-                                     context);
-
   g_free (context->winsys);
 }
 
@@ -558,7 +497,6 @@ static gboolean
 _cogl_winsys_onscreen_init (CoglOnscreen *onscreen,
                             GError **error)
 {
-  CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
   CoglContext *context = framebuffer->context;
   CoglDisplay *display = context->display;
   CoglDisplayWgl *wgl_display = display->winsys;
@@ -573,9 +511,9 @@ _cogl_winsys_onscreen_init (CoglOnscreen *onscreen,
   hwnd = onscreen->hwnd;
 
   GetClientRect (hwnd, &client_rect);
-  _cogl_framebuffer_winsys_update_size (framebuffer,
-					client_rect.right,
-					client_rect.bottom);
+  cogl_onscreen_update_size (onscreen,
+			     client_rect.right,
+			     client_rect.bottom);
 
   onscreen->winsys = g_slice_new0 (CoglOnscreenWgl);
   wgl_onscreen = onscreen->winsys;

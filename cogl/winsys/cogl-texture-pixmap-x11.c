@@ -94,15 +94,6 @@ cogl_damage_rectangle_union (CoglDamageRectangle *damage_rect,
     }
 }
 
-static gboolean
-cogl_damage_rectangle_is_whole (const CoglDamageRectangle *damage_rect,
-                                unsigned int width,
-                                unsigned int height)
-{
-  return (damage_rect->x1 == 0 && damage_rect->y1 == 0
-          && damage_rect->x2 == width && damage_rect->y2 == height);
-}
-
 static const CoglWinsysVtable *
 _cogl_texture_pixmap_x11_get_winsys (CoglTexturePixmapX11 *tex_pixmap)
 {
@@ -113,156 +104,8 @@ _cogl_texture_pixmap_x11_get_winsys (CoglTexturePixmapX11 *tex_pixmap)
   return ctx->display->renderer->winsys_vtable;
 }
 
-static void
-process_damage_event (CoglTexturePixmapX11 *tex_pixmap,
-                      XDamageNotifyEvent *damage_event)
-{
-  Display *display;
-  enum { DO_NOTHING, NEEDS_SUBTRACT, NEED_BOUNDING_BOX } handle_mode;
-  const CoglWinsysVtable *winsys;
-
-  _COGL_GET_CONTEXT (ctxt, NO_RETVAL);
-
-  display = cogl_xlib_get_display ();
-
-  COGL_NOTE (TEXTURE_PIXMAP, "Damage event received for %p", tex_pixmap);
-
-  switch (tex_pixmap->damage_report_level)
-    {
-    case COGL_TEXTURE_PIXMAP_X11_DAMAGE_RAW_RECTANGLES:
-      /* For raw rectangles we don't need do look at the damage region
-         at all because the damage area is directly given in the event
-         struct and the reporting of events is not affected by
-         clearing the damage region */
-      handle_mode = DO_NOTHING;
-      break;
-
-    case COGL_TEXTURE_PIXMAP_X11_DAMAGE_DELTA_RECTANGLES:
-    case COGL_TEXTURE_PIXMAP_X11_DAMAGE_NON_EMPTY:
-      /* For delta rectangles and non empty we'll query the damage
-         region for the bounding box */
-      handle_mode = NEED_BOUNDING_BOX;
-      break;
-
-    case COGL_TEXTURE_PIXMAP_X11_DAMAGE_BOUNDING_BOX:
-      /* For bounding box we need to clear the damage region but we
-         don't actually care what it was because the damage event
-         itself contains the bounding box of the region */
-      handle_mode = NEEDS_SUBTRACT;
-      break;
-
-    default:
-      g_assert_not_reached ();
-    }
-
-  /* If the damage already covers the whole rectangle then we don't
-     need to request the bounding box of the region because we're
-     going to update the whole texture anyway. */
-  if (cogl_damage_rectangle_is_whole (&tex_pixmap->damage_rect,
-                                      tex_pixmap->width,
-                                      tex_pixmap->height))
-    {
-      if (handle_mode != DO_NOTHING)
-        XDamageSubtract (display, tex_pixmap->damage, None, None);
-    }
-  else if (handle_mode == NEED_BOUNDING_BOX)
-    {
-      XserverRegion parts;
-      int r_count;
-      XRectangle r_bounds;
-      XRectangle *r_damage;
-
-      /* We need to extract the damage region so we can get the
-         bounding box */
-
-      parts = XFixesCreateRegion (display, 0, 0);
-      XDamageSubtract (display, tex_pixmap->damage, None, parts);
-      r_damage = XFixesFetchRegionAndBounds (display,
-                                             parts,
-                                             &r_count,
-                                             &r_bounds);
-      cogl_damage_rectangle_union (&tex_pixmap->damage_rect,
-                                   r_bounds.x,
-                                   r_bounds.y,
-                                   r_bounds.width,
-                                   r_bounds.height);
-      if (r_damage)
-        XFree (r_damage);
-
-      XFixesDestroyRegion (display, parts);
-    }
-  else
-    {
-      if (handle_mode == NEEDS_SUBTRACT)
-        /* We still need to subtract from the damage region but we
-           don't care what the region actually was */
-        XDamageSubtract (display, tex_pixmap->damage, None, None);
-
-      cogl_damage_rectangle_union (&tex_pixmap->damage_rect,
-                                   damage_event->area.x,
-                                   damage_event->area.y,
-                                   damage_event->area.width,
-                                   damage_event->area.height);
-    }
-
-  /* If we're using the texture from pixmap extension then there's no
-     point in getting the region and we can just mark that the texture
-     needs updating */
-  winsys = _cogl_texture_pixmap_x11_get_winsys (tex_pixmap);
-  winsys->texture_pixmap_x11_damage_notify (tex_pixmap);
-}
-
-static CoglFilterReturn
-_cogl_texture_pixmap_x11_filter (XEvent *event, void *data)
-{
-  CoglTexturePixmapX11 *tex_pixmap = data;
-  int damage_base;
-
-  _COGL_GET_CONTEXT (ctxt, COGL_FILTER_CONTINUE);
-
-  damage_base = _cogl_xlib_get_damage_base ();
-  if (event->type == damage_base + XDamageNotify)
-    {
-      XDamageNotifyEvent *damage_event = (XDamageNotifyEvent *) event;
-
-      if (damage_event->damage == tex_pixmap->damage)
-        process_damage_event (tex_pixmap, damage_event);
-    }
-
-  return COGL_FILTER_CONTINUE;
-}
-
-static void
-set_damage_object_internal (CoglContext *ctx,
-                            CoglTexturePixmapX11 *tex_pixmap,
-                            Damage damage,
-                            CoglTexturePixmapX11ReportLevel report_level)
-{
-  if (tex_pixmap->damage)
-    {
-      cogl_xlib_renderer_remove_filter (ctx->display->renderer,
-                                        _cogl_texture_pixmap_x11_filter,
-                                        tex_pixmap);
-
-      if (tex_pixmap->damage_owned)
-        {
-          XDamageDestroy (cogl_xlib_get_display (), tex_pixmap->damage);
-          tex_pixmap->damage_owned = FALSE;
-        }
-    }
-
-  tex_pixmap->damage = damage;
-  tex_pixmap->damage_report_level = report_level;
-
-  if (damage)
-    cogl_xlib_renderer_add_filter (ctx->display->renderer,
-                                   _cogl_texture_pixmap_x11_filter,
-                                   tex_pixmap);
-}
-
 CoglHandle
-cogl_texture_pixmap_x11_new (guint32 pixmap,
-                             gboolean automatic_updates)
+cogl_texture_pixmap_x11_new (guint32 pixmap)
 {
   CoglTexturePixmapX11 *tex_pixmap = g_new (CoglTexturePixmapX11, 1);
   Display *display = cogl_xlib_get_display ();
@@ -271,7 +114,6 @@ cogl_texture_pixmap_x11_new (guint32 pixmap,
   unsigned int pixmap_border_width;
   CoglTexture *tex = COGL_TEXTURE (tex_pixmap);
   XWindowAttributes window_attributes;
-  int damage_base;
   const CoglWinsysVtable *winsys;
 
   _COGL_GET_CONTEXT (ctxt, COGL_INVALID_HANDLE);
@@ -282,8 +124,6 @@ cogl_texture_pixmap_x11_new (guint32 pixmap,
   tex_pixmap->image = NULL;
   tex_pixmap->shm_info.shmid = -1;
   tex_pixmap->tex = COGL_INVALID_HANDLE;
-  tex_pixmap->damage_owned = FALSE;
-  tex_pixmap->damage = 0;
 
   if (!XGetGeometry (display, pixmap, &pixmap_root_window,
                      &pixmap_x, &pixmap_y,
@@ -304,22 +144,6 @@ cogl_texture_pixmap_x11_new (guint32 pixmap,
       return COGL_INVALID_HANDLE;
     }
   tex_pixmap->visual = window_attributes.visual;
-
-  /* If automatic updates are requested and the Xlib connection
-     supports damage events then we'll register a damage object on the
-     pixmap */
-  damage_base = _cogl_xlib_get_damage_base ();
-  if (automatic_updates && damage_base >= 0)
-    {
-      Damage damage = XDamageCreate (display,
-                                     pixmap,
-                                     XDamageReportBoundingBox);
-      set_damage_object_internal (ctxt,
-                                  tex_pixmap,
-                                  damage,
-                                  COGL_TEXTURE_PIXMAP_X11_DAMAGE_BOUNDING_BOX);
-      tex_pixmap->damage_owned = TRUE;
-    }
 
   /* Assume the entire pixmap is damaged to begin with */
   tex_pixmap->damage_rect.x1 = 0;
@@ -445,25 +269,6 @@ cogl_texture_pixmap_x11_is_using_tfp_extension (CoglHandle handle)
     return FALSE;
 
   return !!tex_pixmap->winsys;
-}
-
-void
-cogl_texture_pixmap_x11_set_damage_object (CoglHandle handle,
-                                           guint32 damage,
-                                           CoglTexturePixmapX11ReportLevel
-                                                                  report_level)
-{
-  CoglTexturePixmapX11 *tex_pixmap = COGL_TEXTURE_PIXMAP_X11 (handle);
-  int damage_base;
-
-  _COGL_GET_CONTEXT (ctxt, NO_RETVAL);
-
-  if (!cogl_is_texture_pixmap_x11 (tex_pixmap))
-    return;
-
-  damage_base = _cogl_xlib_get_damage_base ();
-  if (damage_base >= 0)
-    set_damage_object_internal (ctxt, tex_pixmap, damage, report_level);
 }
 
 static void
@@ -936,8 +741,6 @@ static void
 _cogl_texture_pixmap_x11_free (CoglTexturePixmapX11 *tex_pixmap)
 {
   _COGL_GET_CONTEXT (ctxt, NO_RETVAL);
-
-  set_damage_object_internal (ctxt, tex_pixmap, 0, 0);
 
   if (tex_pixmap->image)
     XDestroyImage (tex_pixmap->image);

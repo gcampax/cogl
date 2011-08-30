@@ -24,12 +24,11 @@ gdk_window_filter (GdkXEvent  *xevent,
 		   GdkEvent   *event,
 		   void       *user_data)
 {
-    CoglRenderer *renderer = user_data;
+    CoglOnscreen *onscreen = user_data;
 
 #if defined(GDK_WINDOWING_X11) && defined(COGL_HAS_XLIB_SUPPORT)
     if (GDK_IS_X11_WINDOW (event->any.window)) {
-        if (cogl_xlib_renderer_handle_event (renderer, xevent) ==
-            COGL_FILTER_REMOVE)
+        if (cogl_xlib_onscreen_handle_event (onscreen, xevent))
             return GDK_FILTER_REMOVE;
 
         return GDK_FILTER_CONTINUE;
@@ -49,20 +48,8 @@ gdk_window_filter (GdkXEvent  *xevent,
     return GDK_FILTER_CONTINUE;
 }
 
-#if defined(GDK_WINDOWING_X11) && defined(COGL_HAS_XLIB_SUPPORT)
-static void
-cogl_update_event_mask (CoglOnscreen *onscreen,
-                        guint32       event_mask,
-                        void         *user_data)
-{
-    /* Do nothing. Cogl only selects for StructureNotifyMask,
-       and we already select GDK_STRUCTURE_MASK */
-}
-#endif
-
 static CoglOnscreen *
-gdk_create_onscreen (CoglRenderer *renderer,
-                     CoglDisplay  *display,
+gdk_create_onscreen (CoglDisplay  *display,
                      CoglContext  *context,
                      int           width,
                      int           height,
@@ -71,6 +58,7 @@ gdk_create_onscreen (CoglRenderer *renderer,
     GdkWindow *window;
     GdkWindowAttr attr;
     GdkWindowAttributesType attr_type;
+    CoglOnscreen *onscreen;
 
     attr.title = "Hello, world";
     attr.event_mask = GDK_STRUCTURE_MASK;
@@ -95,22 +83,26 @@ gdk_create_onscreen (CoglRenderer *renderer,
 #endif
 
     window = *windowp = gdk_window_new (NULL, &attr, attr_type);
-    gdk_window_add_filter (window, gdk_window_filter, renderer);
 
 #if defined(GDK_WINDOWING_X11) && defined(COGL_HAS_XLIB_SUPPORT)
     if (GDK_IS_X11_WINDOW (window))
-        return cogl_xlib_onscreen_new (context,
-                                       gdk_x11_window_get_xid (window),
-                                       cogl_update_event_mask, NULL);
+        onscreen = cogl_xlib_onscreen_new (context,
+                                           gdk_x11_window_get_xid (window));
 #endif
 
 #if defined(GDK_WINDOWING_WIN32) && defined(COGL_HAS_WGL_SUPPORT)
     if (GDK_IS_WIN32_WINDOW (window))
-        return cogl_win32_onscreen_new (context,
-                                        gdk_win32_window_get_hwnd (window));
+        onscreen = cogl_win32_onscreen_new (context,
+                                            gdk_win32_window_get_hwnd (window));
 #endif
 
-    g_error ("Cannot match Gdk backend to Cogl backend");
+    if (!onscreen)
+        g_error ("Cannot match Gdk backend to Cogl backend");
+
+    gdk_window_add_filter (window, gdk_window_filter, onscreen);
+    g_object_set_data_full (G_OBJECT (window), "cogl-onscreen", onscreen, cogl_object_unref);
+
+    return onscreen;
 }
 
 static void
@@ -118,9 +110,24 @@ gdk_event_handler (GdkEvent *event,
                    void     *user_data)
 {
     GMainLoop *main_loop = user_data;
+    CoglOnscreen *onscreen;
 
-    if (event->any.type == GDK_DELETE)
+    if (event->any.window == NULL)
+        return;
+
+    switch (event->any.type) {
+    case GDK_DELETE:
         g_main_loop_quit (main_loop);
+        break;
+    case GDK_CONFIGURE:
+        onscreen = g_object_get_data (G_OBJECT (event->any.window), "cogl-onscreen");
+        cogl_onscreen_update_size (onscreen,
+                                   event->configure.width,
+                                   event->configure.height);
+        break;
+    default:
+        break;
+    }
 }
 
 static gboolean
@@ -190,7 +197,7 @@ main (int argc, char **argv)
         return 1;
     }
 
-    onscreen = gdk_create_onscreen (renderer, display, ctx, 640, 480, &window);
+    onscreen = gdk_create_onscreen (display, ctx, 640, 480, &window);
 
     ddata.fb = COGL_FRAMEBUFFER (onscreen);
     /* Eventually there will be an implicit allocate on first use so this

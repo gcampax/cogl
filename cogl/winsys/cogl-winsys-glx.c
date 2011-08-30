@@ -62,8 +62,6 @@
 #include <errno.h>
 #endif
 
-#define COGL_ONSCREEN_X11_EVENT_MASK StructureNotifyMask
-
 typedef struct _CoglContextGLX
 {
   GLXDrawable current_drawable;
@@ -137,32 +135,9 @@ _cogl_winsys_renderer_get_proc_address (CoglRenderer *renderer,
   return glx_renderer->glXGetProcAddress ((const GLubyte *) name);
 }
 
-static CoglOnscreen *
-find_onscreen_for_xid (CoglContext *context, guint32 xid)
-{
-  GList *l;
-
-  for (l = context->framebuffers; l; l = l->next)
-    {
-      CoglFramebuffer *framebuffer = l->data;
-      CoglOnscreen *onscreen;
-
-      if (framebuffer->type != COGL_FRAMEBUFFER_TYPE_ONSCREEN)
-        continue;
-
-      /* Does the GLXEvent have the GLXDrawable or the X Window? */
-      onscreen = COGL_ONSCREEN (framebuffer);
-      if (onscreen->xwindow == (Window)xid)
-        return onscreen;
-    }
-
-  return NULL;
-}
-
 static void
-notify_swap_buffers (CoglContext *context, GLXDrawable drawable)
+notify_swap_buffers (CoglContext *context, CoglOnscreen *onscreen)
 {
-  CoglOnscreen *onscreen = find_onscreen_for_xid (context, (guint32)drawable);
   CoglOnscreenGLX *glx_onscreen;
   GList *l;
 
@@ -178,49 +153,31 @@ notify_swap_buffers (CoglContext *context, GLXDrawable drawable)
     }
 }
 
-static CoglFilterReturn
-glx_event_filter_cb (XEvent *xevent, void *data)
+static gboolean
+_cogl_winsys_onscreen_handle_event (CoglOnscreen *onscreen, XEvent *xevent)
 {
-  CoglContext *context = data;
 #ifdef GLX_INTEL_swap_event
-  CoglGLXRenderer *glx_renderer;
-#endif
-
-  if (xevent->type == ConfigureNotify)
-    {
-      CoglOnscreen *onscreen =
-        find_onscreen_for_xid (context, xevent->xconfigure.window);
-
-      if (onscreen)
-        {
-          CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
-
-          _cogl_framebuffer_winsys_update_size (framebuffer,
-                                                xevent->xconfigure.width,
-                                                xevent->xconfigure.height);
-        }
-
-      COGL_NOTE (WINSYS, "ConfigureNotify received");
-
-      /* we let ConfigureNotify pass through */
-      return COGL_FILTER_CONTINUE;
-    }
-
-#ifdef GLX_INTEL_swap_event
-  glx_renderer = context->display->renderer->winsys;
+  CoglFramebuffer *fb = COGL_FRAMEBUFFER (onscreen);
+  CoglGLXRenderer *glx_renderer = fb->context->display->renderer->winsys;
 
   if (xevent->type == (glx_renderer->glx_event_base + GLX_BufferSwapComplete))
     {
       GLXBufferSwapComplete *swap_event = (GLXBufferSwapComplete *) xevent;
 
-      notify_swap_buffers (context, swap_event->drawable);
+      if (swap_event->drawable != onscreen->xwindow)
+	{
+	  g_critical ("cogl_onscreen_handle_event() called on an invalid CoglOnscreen");
+	  return FALSE;
+	}
+
+      notify_swap_buffers (fb->context, onscreen);
 
       /* remove SwapComplete events from the queue */
-      return COGL_FILTER_REMOVE;
+      return TRUE;
     }
 #endif /* GLX_INTEL_swap_event */
 
-  return COGL_FILTER_CONTINUE;
+  return FALSE;
 }
 
 static void
@@ -730,18 +687,12 @@ _cogl_winsys_context_init (CoglContext *context, GError **error)
 {
   context->winsys = g_new0 (CoglContextGLX, 1);
 
-  cogl_xlib_renderer_add_filter (context->display->renderer,
-                                 glx_event_filter_cb,
-                                 context);
   return update_winsys_features (context, error);
 }
 
 static void
 _cogl_winsys_context_deinit (CoglContext *context)
 {
-  cogl_xlib_renderer_remove_filter (context->display->renderer,
-                                    glx_event_filter_cb,
-                                    context);
   g_free (context->winsys);
 }
 
@@ -789,13 +740,8 @@ _cogl_winsys_onscreen_init (CoglOnscreen *onscreen,
       return FALSE;
     }
 
-  _cogl_framebuffer_winsys_update_size (framebuffer,
-					attr.width, attr.height);
-
-  /* Make sure the app selects for the events we require... */
-  onscreen->update_mask_callback (onscreen,
-				  COGL_ONSCREEN_X11_EVENT_MASK,
-				  onscreen->update_mask_data);
+  cogl_onscreen_update_size (onscreen,
+			     attr.width, attr.height);
 
   onscreen->winsys = g_slice_new0 (CoglOnscreenGLX);
   glx_onscreen = onscreen->winsys;
@@ -1898,6 +1844,7 @@ static CoglWinsysVtable _cogl_winsys_vtable =
     .onscreen_remove_swap_buffers_callback =
       _cogl_winsys_onscreen_remove_swap_buffers_callback,
     .onscreen_set_visibility = _cogl_winsys_onscreen_set_visibility,
+    .onscreen_handle_event = _cogl_winsys_onscreen_handle_event,
 
     /* X11 tfp support... */
     /* XXX: instead of having a rather monolithic winsys vtable we could

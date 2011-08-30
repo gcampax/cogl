@@ -355,6 +355,10 @@ cogl_framebuffer_remove_swap_buffers_callback (CoglFramebuffer *framebuffer,
 typedef struct _CoglOnscreen CoglOnscreen;
 #define COGL_ONSCREEN(X) ((CoglOnscreen *)(X))
 
+void
+cogl_onscreen_update_size (CoglOnscreen *framebuffer,
+			   int width, int height);
+
 #if defined (COGL_HAS_EGL_PLATFORM_POWERVR_NULL_SUPPORT) || \
   defined (COGL_HAS_EGL_PLATFORM_ANDROID_SUPPORT)        || \
   defined (COGL_HAS_EGL_PLATFORM_GDL_SUPPORT)
@@ -364,58 +368,22 @@ cogl_egl_onscreen_new (CoglContext *context, int width, int height);
 #endif
 
 #ifdef COGL_HAS_X11
-typedef void (*CoglOnscreenX11MaskCallback) (CoglOnscreen *onscreen,
-                                             guint32 event_mask,
-                                             void *user_data);
-
 /**
- * cogl_xlib_onscreen_foreign_new:
+ * cogl_xlib_onscreen_new:
  * @context: a #CoglContext
  * @xid: the XID of an existing X window
- * @update: a callback for changing event mask.
- * @data: user data for @update
  *
  * Creates a new #CoglOnscreen, targeting @xid for drawing and reading.
- *
- * Since Cogl needs, for example, to track changes to the size of an X
- * window it requires that certain events be selected for via the core
- * X protocol. This requirement may also be changed asynchronously so
- * you must pass in an @update callback to inform you of Cogl's
- * required event mask.
- *
- * For example if you are using Xlib you could use this API roughly
- * as follows:
- * [{
- * static void
- * my_update_cogl_x11_event_mask (CoglOnscreen *onscreen,
- *                                guint32 event_mask,
- *                                void *user_data)
- * {
- *   XSetWindowAttributes attrs;
- *   MyData *data = user_data;
- *   attrs.event_mask = event_mask | data->my_event_mask;
- *   XChangeWindowAttributes (data->xdpy,
- *                            data->xwin,
- *                            CWEventMask,
- *                            &attrs);
- * }
- *
- * {
- *   *snip*
- *   data->onscreen = cogl_xlib_onscreen_new (context,
- *                                            data->xwin,
- *                                            my_update_cogl_x11_event_mask,
- *                                            data);
- *   *snip*
- * }
- * }]
+ * The framebuffer is initially the size of the window. You need to
+ * handle ConfigureNotify events and call cogl_onscreen_update_size() to
+ * let Cogl know the window has changed size. You also need to pass
+ * any extra event to cogl_xlib_onscreen_handle_event() (for example for
+ * GLX swap events).
  */
 #define cogl_xlib_onscreen_new cogl_xlib_onscreen_new_EXP
 CoglOnscreen *
 cogl_xlib_onscreen_new (CoglContext *context,
-			Window       xwindow,
-			CoglOnscreenX11MaskCallback callback,
-			void        *user_data);
+			Window       xwindow);
 
 #define cogl_xlib_onscreen_get_window_xid cogl_xlib_onscreen_get_window_xid_EXP
 guint32
@@ -424,6 +392,23 @@ cogl_xlib_onscreen_get_window_xid (CoglOnscreen *onscreen);
 #define cogl_xlib_onscreen_get_visual_xid cogl_xlib_onscreen_get_visual_xid_EXP
 guint32
 cogl_xlib_onscreen_get_visual_xid (CoglOnscreen *onscreen);
+
+/**
+ * cogl_xlib_onscreen_handle_event:
+ * @onscreen: a #CoglOnscreen targetting a X window
+ * @event: a native event
+ *
+ * Asks Cogl if it is interested in handling this event, which is directed
+ * to the window backing @onscreen. It is an error to pass an event directed
+ * elsewhere.
+ * Returns: %TRUE if Cogl has handled the event, %FALSE otherwise. Only GL
+ *          related events (such as GLX_INTEL_swap_event) are handled,
+ *          therefore they're not expected to be useful to embedding toolkits.
+ */
+#define cogl_xlib_onscreen_handle_event cogl_xlib_onscreen_handle_event_EXP
+gboolean
+cogl_xlib_onscreen_handle_event (CoglOnscreen *onscreen,
+				 XEvent       *event);
 #endif /* COGL_HAS_X11 */
 
 #ifdef COGL_HAS_WIN32_SUPPORT

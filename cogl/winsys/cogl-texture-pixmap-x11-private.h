@@ -68,9 +68,6 @@ struct _CoglTexturePixmapX11
 
   XShmSegmentInfo shm_info;
 
-  Damage damage;
-  CoglTexturePixmapX11ReportLevel damage_report_level;
-  gboolean damage_owned;
   CoglDamageRectangle damage_rect;
 
   void *winsys;

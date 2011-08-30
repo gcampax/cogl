@@ -126,14 +126,10 @@ struct _CoglOnscreen
 
 #ifdef COGL_HAS_X11_SUPPORT
   guint32 xwindow;
-  CoglOnscreenX11MaskCallback update_mask_callback;
-  void *update_mask_data;
 #endif
-
 #ifdef COGL_HAS_WIN32_SUPPORT
   HWND hwnd;
 #endif
-
 #ifdef COGL_HAS_EGL_PLATFORM_WAYLAND_SUPPORT
   struct wl_surface *surface;
 #endif
@@ -145,10 +141,6 @@ struct _CoglOnscreen
 
 void
 _cogl_framebuffer_state_init (void);
-
-void
-_cogl_framebuffer_winsys_update_size (CoglFramebuffer *framebuffer,
-                                      int width, int height);
 
 void
 _cogl_framebuffer_clear_without_flush4f (CoglFramebuffer *framebuffer,

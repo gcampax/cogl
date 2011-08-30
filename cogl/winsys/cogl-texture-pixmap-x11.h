@@ -42,24 +42,14 @@
   cogl_texture_pixmap_x11_set_damage_object_EXP
 #define cogl_is_texture_pixmap_x11 cogl_is_texture_pixmap_x11_EXP
 
-typedef enum
-{
-  COGL_TEXTURE_PIXMAP_X11_DAMAGE_RAW_RECTANGLES,
-  COGL_TEXTURE_PIXMAP_X11_DAMAGE_DELTA_RECTANGLES,
-  COGL_TEXTURE_PIXMAP_X11_DAMAGE_BOUNDING_BOX,
-  COGL_TEXTURE_PIXMAP_X11_DAMAGE_NON_EMPTY
-} CoglTexturePixmapX11ReportLevel;
-
 /**
  * cogl_texture_pixmap_x11_new:
  * @pixmap: A X11 pixmap ID
- * @automatic_updates: Whether to automatically copy the contents of
- * the pixmap to the texture.
  *
- * Creates a texture that contains the contents of @pixmap. If
- * @automatic_updates is %TRUE then Cogl will attempt to listen for
- * damage events on the pixmap and automatically update the texture
- * when it changes.
+ * Creates a texture that contains the contents of @pixmap. You
+ * need to manually handle Damage events on the pixmap and call
+ * cogl_texture_pixamp_x11_update_area() if you want the texture
+ * reflect changes in the underlying pixmap.
  *
  * Return value: a CoglHandle to a texture
  *
@@ -67,8 +57,7 @@ typedef enum
  * Stability: Unstable
  */
 CoglHandle
-cogl_texture_pixmap_x11_new (guint32 pixmap,
-                             gboolean automatic_updates);
+cogl_texture_pixmap_x11_new (guint32 pixmap);
 
 /**
  * cogl_texture_pixmap_x11_update_area:
@@ -109,31 +98,6 @@ cogl_texture_pixmap_x11_update_area (CoglHandle handle,
  */
 gboolean
 cogl_texture_pixmap_x11_is_using_tfp_extension (CoglHandle handle);
-
-/**
- * cogl_texture_pixmap_x11_set_damage_object:
- * @handle: A CoglHandle
- * @damage: A X11 Damage object or 0
- * @report_level: The report level which describes how to interpret
- *   the damage events. This should match the level that the damage
- *   object was created with.
- *
- * Sets the damage object that will be used to track automatic updates
- * to the texture. Damage tracking can be disabled by passing 0 for
- * @damage. Otherwise this damage will replace the one used if %TRUE
- * was passed for automatic_updates to cogl_texture_pixmap_x11_new().
- *
- * Note that Cogl will subtract from the damage region as it processes
- * damage events.
- *
- * Since: 1.4
- * Stability: Unstable
- */
-void
-cogl_texture_pixmap_x11_set_damage_object (CoglHandle handle,
-                                           guint32 damage,
-                                           CoglTexturePixmapX11ReportLevel
-                                                                  report_level);
 
 /**
  * cogl_is_texture_pixmap_x11:

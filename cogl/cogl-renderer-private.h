@@ -57,27 +57,8 @@ struct _CoglRenderer
   struct wl_display *foreign_wayland_display;
   struct wl_compositor *foreign_wayland_compositor;
 #endif
-  /* List of callback functions that will be given every native event */
-  GSList *event_filters;
   void *winsys;
 };
-
-typedef CoglFilterReturn (* CoglNativeFilterFunc) (void *native_event,
-                                                   void *data);
-
-CoglFilterReturn
-_cogl_renderer_handle_native_event (CoglRenderer *renderer,
-                                    void *event);
-
-void
-_cogl_renderer_add_native_filter (CoglRenderer *renderer,
-                                  CoglNativeFilterFunc func,
-                                  void *data);
-
-void
-_cogl_renderer_remove_native_filter (CoglRenderer *renderer,
-                                     CoglNativeFilterFunc func,
-                                     void *data);
 
 void *
 _cogl_renderer_get_proc_address (CoglRenderer *renderer,

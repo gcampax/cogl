@@ -1065,9 +1065,10 @@ _cogl_onscreen_free (CoglOnscreen *onscreen)
 }
 
 void
-_cogl_framebuffer_winsys_update_size (CoglFramebuffer *framebuffer,
-                                      int width, int height)
+cogl_onscreen_update_size (CoglOnscreen *onscreen,
+			   int width, int height)
 {
+  CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
   CoglContext *ctx = framebuffer->context;
 
   if (framebuffer->width == width && framebuffer->height == height)
@@ -1709,21 +1710,13 @@ cogl_framebuffer_swap_region (CoglFramebuffer *framebuffer,
 #ifdef COGL_HAS_X11_SUPPORT
 CoglOnscreen *
 cogl_xlib_onscreen_new (CoglContext *context,
-			Window       xid,
-			CoglOnscreenX11MaskCallback update,
-			void        *user_data)
+			Window       xid)
 {
   CoglOnscreen *onscreen;
-
-  /* We don't wan't applications to get away with being lazy here and not
-   * passing an update callback... */
-  g_return_val_if_fail (update != NULL, NULL);
 
   onscreen = cogl_onscreen_new (context, -1, -1);
 
   onscreen->xwindow = xid;
-  onscreen->update_mask_callback = update;
-  onscreen->update_mask_data = user_data;
 
   return onscreen;
 }
@@ -1747,6 +1740,20 @@ cogl_xlib_onscreen_get_visual_xid (CoglOnscreen *onscreen)
   XFree (visinfo);
   return id;
 }
+
+gboolean
+cogl_xlib_onscreen_handle_event (CoglOnscreen *onscreen,
+				 XEvent       *event)
+{
+  CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
+  const CoglWinsysVtable *winsys = _cogl_framebuffer_get_winsys (framebuffer);
+
+  if (winsys->onscreen_handle_event != NULL)
+    return winsys->onscreen_handle_event (onscreen, event);
+  else
+    return FALSE;
+}
+
 #endif /* COGL_HAS_X11_SUPPORT */
 
 #ifdef COGL_HAS_EGL_PLATFORM_WAYLAND_SUPPORT

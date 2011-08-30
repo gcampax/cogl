@@ -10,27 +10,10 @@
    KeyReleaseMask | \
    ButtonPressMask | \
    ButtonReleaseMask | \
-   PointerMotionMask)
+   PointerMotionMask | \
+   StructureNotifyMask)
 
 CoglColor black;
-
-static void
-update_cogl_x11_event_mask (CoglOnscreen *onscreen,
-                            guint32 event_mask,
-                            void *user_data)
-{
-  Display *xdpy = user_data;
-  XSetWindowAttributes attrs;
-  guint32 xwin;
-
-  attrs.event_mask = event_mask | X11_FOREIGN_EVENT_MASK;
-  xwin = cogl_xlib_onscreen_get_window_xid (onscreen);
-
-  XChangeWindowAttributes (xdpy,
-                           (Window)xwin,
-                           CWEventMask,
-                           &attrs);
-}
 
 int
 main (int argc, char **argv)
@@ -117,7 +100,8 @@ main (int argc, char **argv)
                                     DefaultRootWindow (xdpy),
                                     xvisinfo->visual,
                                     AllocNone);
-  mask = CWBorderPixel | CWColormap;
+  xattr.event_mask = X11_FOREIGN_EVENT_MASK;
+  mask = CWBorderPixel | CWColormap | CWEventMask;
 
   xwin = XCreateWindow (xdpy,
                         DefaultRootWindow (xdpy),
@@ -131,9 +115,7 @@ main (int argc, char **argv)
 
   XFree (xvisinfo);
 
-  onscreen = cogl_xlib_onscreen_new (ctx, xwin,
-				     update_cogl_x11_event_mask,
-				     xdpy);
+  onscreen = cogl_xlib_onscreen_new (ctx, xwin);
 
   fb = COGL_FRAMEBUFFER (onscreen);
   /* Eventually there will be an implicit allocate on first use so this
@@ -156,13 +138,24 @@ main (int argc, char **argv)
         {
           XEvent event;
           XNextEvent (xdpy, &event);
+
+	  if (event.xany.window != xwin)
+	    continue;
+
+          if (cogl_xlib_onscreen_handle_event (onscreen, &event))
+	    continue;
+
           switch (event.type)
             {
             case KeyRelease:
             case ButtonRelease:
               return 0;
+	    case ConfigureNotify:
+	      cogl_onscreen_update_size (onscreen,
+					 event.xconfigure.width,
+					 event.xconfigure.height);
+	      break;
             }
-          cogl_xlib_renderer_handle_event (renderer, &event);
         }
       cogl_clear (&black, COGL_BUFFER_BIT_COLOR);
       cogl_primitive_draw (triangle);

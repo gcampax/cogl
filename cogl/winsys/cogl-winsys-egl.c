@@ -68,8 +68,6 @@
 
 #ifdef COGL_HAS_EGL_PLATFORM_POWERVR_X11_SUPPORT
 #include <X11/Xlib.h>
-
-#define COGL_ONSCREEN_X11_EVENT_MASK StructureNotifyMask
 #endif
 
 typedef enum _CoglEGLWinsysFeature
@@ -247,30 +245,6 @@ find_onscreen_for_xid (CoglContext *context, guint32 xid)
 
   return NULL;
 }
-
-static CoglFilterReturn
-event_filter_cb (XEvent *xevent, void *data)
-{
-  CoglContext *context = data;
-
-  if (xevent->type == ConfigureNotify)
-    {
-      CoglOnscreen *onscreen =
-        find_onscreen_for_xid (context, xevent->xconfigure.window);
-
-      if (onscreen)
-        {
-          CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
-
-          /* XXX: consider adding an abstraction for this... */
-          framebuffer->width = xevent->xconfigure.width;
-          framebuffer->height = xevent->xconfigure.height;
-        }
-    }
-
-  return COGL_FILTER_CONTINUE;
-}
-#endif /* COGL_HAS_EGL_PLATFORM_POWERVR_X11_SUPPORT */
 
 static void
 _cogl_winsys_renderer_disconnect (CoglRenderer *renderer)
@@ -1158,22 +1132,12 @@ _cogl_winsys_context_init (CoglContext *context, GError **error)
 {
   context->winsys = g_new0 (CoglContextEGL, 1);
 
-#ifdef COGL_HAS_EGL_PLATFORM_POWERVR_X11_SUPPORT
-  cogl_xlib_renderer_add_filter (context->display->renderer,
-                                 event_filter_cb,
-                                 context);
-#endif
   return update_winsys_features (context, error);
 }
 
 static void
 _cogl_winsys_context_deinit (CoglContext *context)
 {
-#ifdef COGL_HAS_EGL_PLATFORM_POWERVR_X11_SUPPORT
-  cogl_xlib_renderer_remove_filter (context->display->renderer,
-                                    event_filter_cb,
-                                    context);
-#endif
   g_free (context->winsys);
 }
 
@@ -1206,13 +1170,6 @@ _cogl_winsys_onscreen_init (CoglOnscreen *onscreen,
 
 #ifdef COGL_HAS_EGL_PLATFORM_POWERVR_X11_SUPPORT
 
-  /* FIXME: We need to explicitly Select for ConfigureNotify events.
-   * For foreign windows we need to be careful not to mess up any
-   * existing event mask.
-   * We need to document that for windows we create then toolkits
-   * must be careful not to clear event mask bits that we select.
-   */
-
   xwin = onscreen->xwindow;
 
   _cogl_xlib_renderer_trap_errors (display->renderer, &state);
@@ -1231,13 +1188,9 @@ _cogl_winsys_onscreen_init (CoglOnscreen *onscreen,
       return FALSE;
     }
 
-  _cogl_framebuffer_winsys_update_size (framebuffer,
-					attr.width, attr.height);
+  cogl_onscreen_update_size (onscreen,
+			     attr.width, attr.height);
 
-  /* Make sure the app selects for the events we require... */
-  onscreen->update_mask_callback (onscreen,
-				  COGL_ONSCREEN_X11_EVENT_MASK,
-				  onscreen->update_mask_data);
 #endif /* COGL_HAS_EGL_PLATFORM_POWERVR_X11_SUPPORT */
 
   onscreen->winsys = g_slice_new0 (CoglOnscreenEGL);
@@ -1286,9 +1239,9 @@ _cogl_winsys_onscreen_init (CoglOnscreen *onscreen,
 
   egl_onscreen->egl_surface = egl_display->egl_surface;
 
-  _cogl_framebuffer_winsys_update_size (framebuffer,
-                                        egl_display->egl_surface_width,
-                                        egl_display->egl_surface_height);
+  cogl_onscreen_update_size (onscreen,
+			     egl_display->egl_surface_width,
+			     egl_display->egl_surface_height);
   egl_display->have_onscreen = TRUE;
 #else
 #error "Unknown EGL platform"

@@ -118,6 +118,10 @@ typedef struct _CoglWinsysVtable
 #ifdef COGL_HAS_XLIB_SUPPORT
   XVisualInfo *
   (*xlib_get_visual_info) (CoglDisplay *display);
+
+  gboolean
+  (*onscreen_handle_event) (CoglOnscreen *onscreen,
+			    XEvent       *event);
 #endif
 
   unsigned int

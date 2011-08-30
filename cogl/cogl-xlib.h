@@ -60,25 +60,4 @@ cogl_xlib_get_display (void);
 void
 cogl_xlib_set_display (Display *display);
 
-/*
- * cogl_xlib_handle_event:
- * @xevent: pointer to XEvent structure
- *
- * This function processes a single X event; it can be used to hook
- * into external X event retrieval (for example that done by Clutter
- * or GDK).
- *
- * Return value: #CoglXlibFilterReturn. %COGL_XLIB_FILTER_REMOVE
- * indicates that Cogl has internally handled the event and the
- * caller should do no further processing. %COGL_XLIB_FILTER_CONTINUE
- * indicates that Cogl is either not interested in the event,
- * or has used the event to update internal state without taking
- * any exclusive action.
- *
- * Stability: Unstable
- */
-#define cogl_xlib_handle_event cogl_xlib_handle_event_EXP
-CoglFilterReturn
-cogl_xlib_handle_event (XEvent *xevent);
-
 #endif /* __COGL_XLIB_H__ */
