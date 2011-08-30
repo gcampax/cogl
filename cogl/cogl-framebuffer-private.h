@@ -125,17 +125,17 @@ struct _CoglOnscreen
   CoglFramebuffer  _parent;
 
 #ifdef COGL_HAS_X11_SUPPORT
-  guint32 foreign_xid;
-  CoglOnscreenX11MaskCallback foreign_update_mask_callback;
-  void *foreign_update_mask_data;
+  guint32 xwindow;
+  CoglOnscreenX11MaskCallback update_mask_callback;
+  void *update_mask_data;
 #endif
 
 #ifdef COGL_HAS_WIN32_SUPPORT
-  HWND foreign_hwnd;
+  HWND hwnd;
 #endif
 
 #ifdef COGL_HAS_EGL_PLATFORM_WAYLAND_SUPPORT
-  struct wl_surface *foreign_surface;
+  struct wl_surface *surface;
 #endif
 
   gboolean swap_throttled;

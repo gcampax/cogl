@@ -69,15 +69,8 @@ typedef struct _CoglContextGLX
   GLXDrawable current_drawable;
 } CoglContextGLX;
 
-typedef struct _CoglOnscreenXlib
-{
-  Window xwin;
-  gboolean is_foreign_xwin;
-} CoglOnscreenXlib;
-
 typedef struct _CoglOnscreenGLX
 {
-  CoglOnscreenXlib _parent;
   GLXDrawable glxwin;
   guint32 last_swap_vsync_counter;
   GList *swap_callbacks;
@@ -152,15 +145,15 @@ find_onscreen_for_xid (CoglContext *context, guint32 xid)
   for (l = context->framebuffers; l; l = l->next)
     {
       CoglFramebuffer *framebuffer = l->data;
-      CoglOnscreenXlib *xlib_onscreen;
+      CoglOnscreen *onscreen;
 
       if (framebuffer->type != COGL_FRAMEBUFFER_TYPE_ONSCREEN)
         continue;
 
       /* Does the GLXEvent have the GLXDrawable or the X Window? */
-      xlib_onscreen = COGL_ONSCREEN (framebuffer)->winsys;
-      if (xlib_onscreen->xwin == (Window)xid)
-        return COGL_ONSCREEN (framebuffer);
+      onscreen = COGL_ONSCREEN (framebuffer);
+      if (onscreen->xwindow == (Window)xid)
+        return onscreen;
     }
 
   return NULL;
@@ -763,8 +756,11 @@ _cogl_winsys_onscreen_init (CoglOnscreen *onscreen,
   CoglXlibRenderer *xlib_renderer = display->renderer->winsys;
   CoglGLXRenderer *glx_renderer = display->renderer->winsys;
   Window xwin;
-  CoglOnscreenXlib *xlib_onscreen;
   CoglOnscreenGLX *glx_onscreen;
+  Status status;
+  CoglXlibTrapState state;
+  XWindowAttributes attr;
+  int xerror;
 
   g_return_val_if_fail (glx_display->glx_context, FALSE);
 
@@ -775,113 +771,34 @@ _cogl_winsys_onscreen_init (CoglOnscreen *onscreen,
    * must be careful not to clear event mask bits that we select.
    */
 
-  /* XXX: Note we ignore the user's original width/height when
-   * given a foreign X window. */
-  if (onscreen->foreign_xid)
+  xwin = onscreen->xwindow;
+
+  _cogl_xlib_renderer_trap_errors (display->renderer, &state);
+
+  status = XGetWindowAttributes (xlib_renderer->xdpy, xwin, &attr);
+  XSync (xlib_renderer->xdpy, False);
+  xerror = _cogl_xlib_renderer_untrap_errors (display->renderer, &state);
+  if (status == 0 || xerror)
     {
-      Status status;
-      CoglXlibTrapState state;
-      XWindowAttributes attr;
-      int xerror;
-
-      xwin = onscreen->foreign_xid;
-
-      _cogl_xlib_renderer_trap_errors (display->renderer, &state);
-
-      status = XGetWindowAttributes (xlib_renderer->xdpy, xwin, &attr);
-      XSync (xlib_renderer->xdpy, False);
-      xerror = _cogl_xlib_renderer_untrap_errors (display->renderer, &state);
-      if (status == 0 || xerror)
-        {
-          char message[1000];
-          XGetErrorText (xlib_renderer->xdpy, xerror, message, sizeof(message));
-          g_set_error (error, COGL_WINSYS_ERROR,
-                       COGL_WINSYS_ERROR_CREATE_ONSCREEN,
-                       "Unable to query geometry of foreign xid 0x%08lX: %s",
-                       xwin, message);
-          return FALSE;
-        }
-
-      _cogl_framebuffer_winsys_update_size (framebuffer,
-                                            attr.width, attr.height);
-
-      /* Make sure the app selects for the events we require... */
-      onscreen->foreign_update_mask_callback (onscreen,
-                                              COGL_ONSCREEN_X11_EVENT_MASK,
-                                              onscreen->foreign_update_mask_data);
+      char message[1000];
+      XGetErrorText (xlib_renderer->xdpy, xerror, message, sizeof(message));
+      g_set_error (error, COGL_WINSYS_ERROR,
+		   COGL_WINSYS_ERROR_CREATE_ONSCREEN,
+		   "Unable to query geometry of foreign xid 0x%08lX: %s",
+		   xwin, message);
+      return FALSE;
     }
-  else
-    {
-      int width;
-      int height;
-      CoglXlibTrapState state;
-      XVisualInfo *xvisinfo;
-      XSetWindowAttributes xattr;
-      unsigned long mask;
-      int xerror;
 
-      width = cogl_framebuffer_get_width (framebuffer);
-      height = cogl_framebuffer_get_height (framebuffer);
+  _cogl_framebuffer_winsys_update_size (framebuffer,
+					attr.width, attr.height);
 
-      _cogl_xlib_renderer_trap_errors (display->renderer, &state);
-
-      xvisinfo = glx_renderer->glXGetVisualFromFBConfig (xlib_renderer->xdpy,
-                                                         glx_display->fbconfig);
-      if (xvisinfo == NULL)
-        {
-          g_set_error (error, COGL_WINSYS_ERROR,
-                       COGL_WINSYS_ERROR_CREATE_ONSCREEN,
-                       "Unable to retrieve the X11 visual of context's "
-                       "fbconfig");
-          return FALSE;
-        }
-
-      /* window attributes */
-      xattr.background_pixel = WhitePixel (xlib_renderer->xdpy,
-                                           DefaultScreen (xlib_renderer->xdpy));
-      xattr.border_pixel = 0;
-      /* XXX: is this an X resource that we are leaking‽... */
-      xattr.colormap = XCreateColormap (xlib_renderer->xdpy,
-                                        DefaultRootWindow (xlib_renderer->xdpy),
-                                        xvisinfo->visual,
-                                        AllocNone);
-      xattr.event_mask = COGL_ONSCREEN_X11_EVENT_MASK;
-
-      mask = CWBorderPixel | CWColormap | CWEventMask;
-
-      xwin = XCreateWindow (xlib_renderer->xdpy,
-                            DefaultRootWindow (xlib_renderer->xdpy),
-                            0, 0,
-                            width, height,
-                            0,
-                            xvisinfo->depth,
-                            InputOutput,
-                            xvisinfo->visual,
-                            mask, &xattr);
-
-      XFree (xvisinfo);
-
-      XSync (xlib_renderer->xdpy, False);
-      xerror = _cogl_xlib_renderer_untrap_errors (display->renderer, &state);
-      if (xerror)
-        {
-          char message[1000];
-          XGetErrorText (xlib_renderer->xdpy, xerror,
-                         message, sizeof (message));
-          g_set_error (error, COGL_WINSYS_ERROR,
-                       COGL_WINSYS_ERROR_CREATE_ONSCREEN,
-                       "X error while creating Window for CoglOnscreen: %s",
-                       message);
-          return FALSE;
-        }
-    }
+  /* Make sure the app selects for the events we require... */
+  onscreen->update_mask_callback (onscreen,
+				  COGL_ONSCREEN_X11_EVENT_MASK,
+				  onscreen->update_mask_data);
 
   onscreen->winsys = g_slice_new0 (CoglOnscreenGLX);
-  xlib_onscreen = onscreen->winsys;
   glx_onscreen = onscreen->winsys;
-
-  xlib_onscreen->xwin = xwin;
-  xlib_onscreen->is_foreign_xwin = onscreen->foreign_xid ? TRUE : FALSE;
 
   /* Try and create a GLXWindow to use with extensions dependent on
    * GLX versions >= 1.3 that don't accept regular X Windows as GLX
@@ -891,7 +808,7 @@ _cogl_winsys_onscreen_init (CoglOnscreen *onscreen,
       glx_onscreen->glxwin =
         glx_renderer->glXCreateWindow (xlib_renderer->xdpy,
                                        glx_display->fbconfig,
-                                       xlib_onscreen->xwin,
+                                       onscreen->xwindow,
                                        NULL);
     }
 
@@ -899,7 +816,7 @@ _cogl_winsys_onscreen_init (CoglOnscreen *onscreen,
   if (_cogl_winsys_has_feature (COGL_WINSYS_FEATURE_SWAP_BUFFERS_EVENT))
     {
       GLXDrawable drawable =
-        glx_onscreen->glxwin ? glx_onscreen->glxwin : xlib_onscreen->xwin;
+        glx_onscreen->glxwin ? glx_onscreen->glxwin : onscreen->xwindow;
 
       /* similarly to above, we unconditionally select this event
        * because we rely on it to advance the master clock, and
@@ -922,7 +839,6 @@ _cogl_winsys_onscreen_deinit (CoglOnscreen *onscreen)
   CoglXlibRenderer *xlib_renderer = context->display->renderer->winsys;
   CoglGLXRenderer *glx_renderer = context->display->renderer->winsys;
   CoglXlibTrapState old_state;
-  CoglOnscreenXlib *xlib_onscreen = onscreen->winsys;
   CoglOnscreenGLX *glx_onscreen = onscreen->winsys;
 
   /* If we never successfully allocated then there's nothing to do */
@@ -937,14 +853,6 @@ _cogl_winsys_onscreen_deinit (CoglOnscreen *onscreen)
                                       glx_onscreen->glxwin);
       glx_onscreen->glxwin = None;
     }
-
-  if (!xlib_onscreen->is_foreign_xwin && xlib_onscreen->xwin != None)
-    {
-      XDestroyWindow (xlib_renderer->xdpy, xlib_onscreen->xwin);
-      xlib_onscreen->xwin = None;
-    }
-  else
-    xlib_onscreen->xwin = None;
 
   XSync (xlib_renderer->xdpy, False);
 
@@ -963,7 +871,6 @@ _cogl_winsys_onscreen_bind (CoglOnscreen *onscreen)
   CoglGLXDisplay *glx_display = context->display->winsys;
   CoglXlibRenderer *xlib_renderer = context->display->renderer->winsys;
   CoglGLXRenderer *glx_renderer = context->display->renderer->winsys;
-  CoglOnscreenXlib *xlib_onscreen = onscreen->winsys;
   CoglOnscreenGLX *glx_onscreen = onscreen->winsys;
   CoglXlibTrapState old_state;
   GLXDrawable drawable;
@@ -986,7 +893,7 @@ _cogl_winsys_onscreen_bind (CoglOnscreen *onscreen)
   else
     {
       drawable =
-        glx_onscreen->glxwin ? glx_onscreen->glxwin : xlib_onscreen->xwin;
+        glx_onscreen->glxwin ? glx_onscreen->glxwin : onscreen->xwindow;
 
       if (glx_context->current_drawable == drawable)
         return;
@@ -994,10 +901,9 @@ _cogl_winsys_onscreen_bind (CoglOnscreen *onscreen)
       _cogl_xlib_renderer_trap_errors (context->display->renderer, &old_state);
 
       COGL_NOTE (WINSYS,
-                 "MakeContextCurrent dpy: %p, window: 0x%x (%s), context: %p",
+                 "MakeContextCurrent dpy: %p, window: 0x%x, context: %p",
                  xlib_renderer->xdpy,
                  (unsigned int) drawable,
-                 xlib_onscreen->is_foreign_xwin ? "foreign" : "native",
                  glx_display->glx_context);
 
       glx_renderer->glXMakeContextCurrent (xlib_renderer->xdpy,
@@ -1123,10 +1029,9 @@ _cogl_winsys_onscreen_swap_region (CoglOnscreen *onscreen,
   CoglContext *context = framebuffer->context;
   CoglXlibRenderer *xlib_renderer = context->display->renderer->winsys;
   CoglGLXRenderer *glx_renderer = context->display->renderer->winsys;
-  CoglOnscreenXlib *xlib_onscreen = onscreen->winsys;
   CoglOnscreenGLX *glx_onscreen = onscreen->winsys;
   GLXDrawable drawable =
-    glx_onscreen->glxwin ? glx_onscreen->glxwin : xlib_onscreen->xwin;
+    glx_onscreen->glxwin ? glx_onscreen->glxwin : onscreen->xwindow;
   guint32 end_frame_vsync_counter = 0;
   gboolean have_counter;
   gboolean can_wait;
@@ -1267,7 +1172,6 @@ _cogl_winsys_onscreen_swap_buffers (CoglOnscreen *onscreen)
   CoglContext *context = framebuffer->context;
   CoglXlibRenderer *xlib_renderer = context->display->renderer->winsys;
   CoglGLXRenderer *glx_renderer = context->display->renderer->winsys;
-  CoglOnscreenXlib *xlib_onscreen = onscreen->winsys;
   CoglOnscreenGLX *glx_onscreen = onscreen->winsys;
   gboolean have_counter;
   GLXDrawable drawable;
@@ -1280,7 +1184,7 @@ _cogl_winsys_onscreen_swap_buffers (CoglOnscreen *onscreen)
                                  framebuffer,
                                  COGL_FRAMEBUFFER_FLUSH_BIND_ONLY);
 
-  drawable = glx_onscreen->glxwin ? glx_onscreen->glxwin : xlib_onscreen->xwin;
+  drawable = glx_onscreen->glxwin ? glx_onscreen->glxwin : onscreen->xwindow;
 
   if (onscreen->swap_throttled)
     {
@@ -1337,13 +1241,6 @@ _cogl_winsys_onscreen_swap_buffers (CoglOnscreen *onscreen)
     glx_onscreen->last_swap_vsync_counter = _cogl_winsys_get_vsync_counter ();
 }
 
-static guint32
-_cogl_winsys_onscreen_x11_get_window_xid (CoglOnscreen *onscreen)
-{
-  CoglOnscreenXlib *xlib_onscreen = onscreen->winsys;
-  return xlib_onscreen->xwin;
-}
-
 static unsigned int
 _cogl_winsys_onscreen_add_swap_buffers_callback (CoglOnscreen *onscreen,
                                                  CoglSwapBuffersNotify callback,
@@ -1389,9 +1286,8 @@ _cogl_winsys_onscreen_update_swap_throttled (CoglOnscreen *onscreen)
   CoglContext *context = COGL_FRAMEBUFFER (onscreen)->context;
   CoglContextGLX *glx_context = context->winsys;
   CoglOnscreenGLX *glx_onscreen = onscreen->winsys;
-  CoglOnscreenXlib *xlib_onscreen = onscreen->winsys;
   GLXDrawable drawable =
-    glx_onscreen->glxwin ? glx_onscreen->glxwin : xlib_onscreen->xwin;
+    glx_onscreen->glxwin ? glx_onscreen->glxwin : onscreen->xwindow;
 
   if (glx_context->current_drawable != drawable)
     return;
@@ -1406,12 +1302,11 @@ _cogl_winsys_onscreen_set_visibility (CoglOnscreen *onscreen,
 {
   CoglContext *context = COGL_FRAMEBUFFER (onscreen)->context;
   CoglXlibRenderer *xlib_renderer = context->display->renderer->winsys;
-  CoglOnscreenXlib *xlib_onscreen = onscreen->winsys;
 
   if (visibility)
-    XMapWindow (xlib_renderer->xdpy, xlib_onscreen->xwin);
+    XMapWindow (xlib_renderer->xdpy, onscreen->xwindow);
   else
-    XUnmapWindow (xlib_renderer->xdpy, xlib_onscreen->xwin);
+    XUnmapWindow (xlib_renderer->xdpy, onscreen->xwindow);
 }
 
 static XVisualInfo *
@@ -1998,8 +1893,6 @@ static CoglWinsysVtable _cogl_winsys_vtable =
     .onscreen_swap_region = _cogl_winsys_onscreen_swap_region,
     .onscreen_update_swap_throttled =
       _cogl_winsys_onscreen_update_swap_throttled,
-    .onscreen_x11_get_window_xid =
-      _cogl_winsys_onscreen_x11_get_window_xid,
     .onscreen_add_swap_buffers_callback =
       _cogl_winsys_onscreen_add_swap_buffers_callback,
     .onscreen_remove_swap_buffers_callback =

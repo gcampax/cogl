@@ -63,7 +63,7 @@ G_BEGIN_DECLS
  * If you want to create a new framebuffer then you should start by
  * looking at the #CoglOnscreen and #CoglOffscreen constructor
  * functions, such as cogl_offscreen_new_to_texture() or
- * cogl_onscreen_new(). The #CoglFramebuffer interface deals with
+ * cogl_xlib_onscreen_new(). The #CoglFramebuffer interface deals with
  * all aspects that are common between those two types of framebuffer.
  *
  * Setup of a new CoglFramebuffer happens in two stages. There is a
@@ -79,8 +79,6 @@ G_BEGIN_DECLS
  */
 
 #ifdef COGL_ENABLE_EXPERIMENTAL_API
-#define cogl_onscreen_new cogl_onscreen_new_EXP
-
 #define COGL_FRAMEBUFFER(X) ((CoglFramebuffer *)(X))
 
 #define cogl_framebuffer_allocate cogl_framebuffer_allocate_EXP
@@ -357,8 +355,13 @@ cogl_framebuffer_remove_swap_buffers_callback (CoglFramebuffer *framebuffer,
 typedef struct _CoglOnscreen CoglOnscreen;
 #define COGL_ONSCREEN(X) ((CoglOnscreen *)(X))
 
+#if defined (COGL_HAS_EGL_PLATFORM_POWERVR_NULL_SUPPORT) || \
+  defined (COGL_HAS_EGL_PLATFORM_ANDROID_SUPPORT)        || \
+  defined (COGL_HAS_EGL_PLATFORM_GDL_SUPPORT)
+#define cogl_egl_onscreen_new cogl_egl_onscreen_new_EXP
 CoglOnscreen *
-cogl_onscreen_new (CoglContext *context, int width, int height);
+cogl_egl_onscreen_new (CoglContext *context, int width, int height);
+#endif
 
 #ifdef COGL_HAS_X11
 typedef void (*CoglOnscreenX11MaskCallback) (CoglOnscreen *onscreen,
@@ -399,20 +402,20 @@ typedef void (*CoglOnscreenX11MaskCallback) (CoglOnscreen *onscreen,
  *
  * {
  *   *snip*
- *   data->onscreen = cogl_xlib_onscreen_foreign_new (context,
- *                                                    data->xwin,
- *                                                    my_update_cogl_x11_event_mask,
- *                                                    data);
+ *   data->onscreen = cogl_xlib_onscreen_new (context,
+ *                                            data->xwin,
+ *                                            my_update_cogl_x11_event_mask,
+ *                                            data);
  *   *snip*
  * }
  * }]
  */
-#define cogl_xlib_onscreen_foreign_new cogl_xlib_onscreen_foreign_new_EXP
+#define cogl_xlib_onscreen_new cogl_xlib_onscreen_new_EXP
 CoglOnscreen *
-cogl_xlib_onscreen_foreign_new (CoglContext *context,
-				Window       xwindow,
-				CoglOnscreenX11MaskCallback callback,
-				void        *user_data);
+cogl_xlib_onscreen_new (CoglContext *context,
+			Window       xwindow,
+			CoglOnscreenX11MaskCallback callback,
+			void        *user_data);
 
 #define cogl_xlib_onscreen_get_window_xid cogl_xlib_onscreen_get_window_xid_EXP
 guint32
@@ -424,9 +427,9 @@ cogl_xlib_onscreen_get_visual_xid (CoglOnscreen *onscreen);
 #endif /* COGL_HAS_X11 */
 
 #ifdef COGL_HAS_WIN32_SUPPORT
-#define cogl_win32_onscreen_foreign_new cogl_win32_onscreen_foreign_new_EXP
+#define cogl_win32_onscreen_new cogl_win32_onscreen_foreign_new_EXP
 CoglOnscreen *
-cogl_win32_onscreen_foreign_new (CoglContext *context,
+cogl_win32_onscreen_new (CoglContext *context,
 				 HWND         hwnd);
 
 #define cogl_win32_onscreen_get_window cogl_win32_onscreen_get_window_EXP
@@ -437,7 +440,7 @@ cogl_win32_onscreen_get_window (CoglOnscreen *onscreen);
 #if defined (COGL_HAS_EGL_PLATFORM_WAYLAND_SUPPORT)
 #define cogl_wayland_onscreen_foreign_new cogl_wayland_onscreen_foreign_new_EXP
 CoglOnscreen *
-cogl_wayland_onscreen_foreign_new (CoglContext *context,
+cogl_wayland_onscreen_new (CoglContext *context,
 				   struct wl_surface *surface,
 				   int width,
 				   int height);

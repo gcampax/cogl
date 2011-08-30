@@ -987,7 +987,7 @@ _cogl_onscreen_new (void)
   return _cogl_onscreen_object_new (onscreen);
 }
 
-CoglOnscreen *
+static CoglOnscreen *
 cogl_onscreen_new (CoglContext *ctx, int width, int height)
 {
   CoglOnscreen *onscreen;
@@ -1015,6 +1015,16 @@ cogl_onscreen_new (CoglContext *ctx, int width, int height)
 
   return _cogl_onscreen_object_new (onscreen);
 }
+
+#if defined (COGL_HAS_EGL_PLATFORM_POWERVR_NULL_SUPPORT) || \
+    defined (COGL_HAS_EGL_PLATFORM_ANDROID_SUPPORT)      || \
+    defined (COGL_HAS_EGL_PLATFORM_GDL_SUPPORT)
+CoglOnscreen *
+cogl_egl_onscreen_new (CoglContext *ctx, int width, int height)
+{
+  return cogl_onscreen_new (ctx, width, height);
+}
+#endif
 
 gboolean
 cogl_framebuffer_allocate (CoglFramebuffer *framebuffer,
@@ -1698,10 +1708,10 @@ cogl_framebuffer_swap_region (CoglFramebuffer *framebuffer,
 
 #ifdef COGL_HAS_X11_SUPPORT
 CoglOnscreen *
-cogl_xlib_onscreen_foreign_new (CoglContext *context,
-				Window       xid,
-				CoglOnscreenX11MaskCallback update,
-				void        *user_data)
+cogl_xlib_onscreen_new (CoglContext *context,
+			Window       xid,
+			CoglOnscreenX11MaskCallback update,
+			void        *user_data)
 {
   CoglOnscreen *onscreen;
 
@@ -1711,9 +1721,9 @@ cogl_xlib_onscreen_foreign_new (CoglContext *context,
 
   onscreen = cogl_onscreen_new (context, -1, -1);
 
-  onscreen->foreign_xid = xid;
-  onscreen->foreign_update_mask_callback = update;
-  onscreen->foreign_update_mask_data = user_data;
+  onscreen->xwindow = xid;
+  onscreen->update_mask_callback = update;
+  onscreen->update_mask_data = user_data;
 
   return onscreen;
 }
@@ -1721,19 +1731,7 @@ cogl_xlib_onscreen_foreign_new (CoglContext *context,
 guint32
 cogl_xlib_onscreen_get_window_xid (CoglOnscreen *onscreen)
 {
-  CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
-
-  if (onscreen->foreign_xid)
-    return onscreen->foreign_xid;
-  else
-    {
-      const CoglWinsysVtable *winsys = _cogl_framebuffer_get_winsys (framebuffer);
-
-      /* This should only be called for x11 onscreens */
-      g_return_val_if_fail (winsys->onscreen_x11_get_window_xid != NULL, 0);
-
-      return winsys->onscreen_x11_get_window_xid (onscreen);
-    }
+  return onscreen->xwindow;
 }
 
 guint32
@@ -1753,14 +1751,14 @@ cogl_xlib_onscreen_get_visual_xid (CoglOnscreen *onscreen)
 
 #ifdef COGL_HAS_EGL_PLATFORM_WAYLAND_SUPPORT
 CoglOnscreen *
-cogl_wayland_onscreen_foreign_new (CoglContext *context,
-				   struct wl_surface *surface,
-				   int width,
-				   int heigth)
+cogl_wayland_onscreen_new (CoglContext *context,
+			   struct wl_surface *surface,
+			   int width,
+			   int heigth)
 {
   CoglOnscreen *onscreen = cogl_onscreen_new (context, width, heigth);
 
-  onscreen->foreign_surface = surface;
+  onscreen->surface = surface;
 
   return onscreen;
 }
@@ -1769,13 +1767,13 @@ cogl_wayland_onscreen_foreign_new (CoglContext *context,
 #ifdef COGL_HAS_WIN32_SUPPORT
 
 CoglOnscreen *
-cogl_win32_onscreen_foreign_new (CoglContext *context,
-				 HWND hwnd)
+cogl_win32_onscreen_new (CoglContext *context,
+			 HWND hwnd)
 {
   /* width and height are ignored */
   CoglOnscreen *onscreen = cogl_onscreen_new (context, 1, 1);
 
-  onscreen->foreign_hwnd = hwnd;
+  onscreen->hwnd = hwnd;
 
   return onscreen;
 }
@@ -1783,19 +1781,7 @@ cogl_win32_onscreen_foreign_new (CoglContext *context,
 HWND
 cogl_win32_onscreen_get_window (CoglOnscreen *onscreen)
 {
-  if (onscreen->foreign_hwnd)
-    return onscreen->foreign_hwnd;
-  else
-    {
-      CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
-      const CoglWinsysVtable *winsys =
-        _cogl_framebuffer_get_winsys (framebuffer);
-
-      /* This should only be called for win32 onscreens */
-      g_return_val_if_fail (winsys->onscreen_win32_get_window != NULL, 0);
-
-      return winsys->onscreen_win32_get_window (onscreen);
-    }
+  return onscreen->hwnd;
 }
 
 #endif /* COGL_HAS_WIN32_SUPPORT */

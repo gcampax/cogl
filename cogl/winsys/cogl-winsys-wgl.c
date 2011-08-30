@@ -64,17 +64,10 @@ typedef struct _CoglRendererWgl
 
 typedef struct _CoglDisplayWgl
 {
-  ATOM window_class;
   HGLRC wgl_context;
   HWND dummy_hwnd;
   HDC dummy_dc;
 } CoglDisplayWgl;
-
-typedef struct _CoglOnscreenWin32
-{
-  HWND hwnd;
-  gboolean is_foreign_hwnd;
-} CoglOnscreenWin32;
 
 typedef struct _CoglContextWgl
 {
@@ -83,8 +76,6 @@ typedef struct _CoglContextWgl
 
 typedef struct _CoglOnscreenWgl
 {
-  CoglOnscreenWin32 _parent;
-
   HDC client_dc;
 
   gboolean swap_throttled;
@@ -162,26 +153,15 @@ find_onscreen_for_hwnd (CoglContext *context, HWND hwnd)
   CoglDisplayWgl *display_wgl = context->display->winsys;
   GList *l;
 
-  /* If the hwnd has Cogl's window class then we can lookup the
-     onscreen pointer directly by reading the extra window data */
-  if (GetClassLongPtr (hwnd, GCW_ATOM) == display_wgl->window_class)
-    {
-      CoglOnscreen *onscreen = (CoglOnscreen *) GetWindowLongPtr (hwnd, 0);
-
-      if (onscreen)
-        return onscreen;
-    }
-
   for (l = context->framebuffers; l; l = l->next)
     {
       CoglFramebuffer *framebuffer = l->data;
 
       if (framebuffer->type == COGL_FRAMEBUFFER_TYPE_ONSCREEN)
         {
-          CoglOnscreenWin32 *win32_onscreen =
-            COGL_ONSCREEN (framebuffer)->winsys;
+          CoglOnscreen *onscreen = COGL_ONSCREEN (framebuffer);
 
-          if (win32_onscreen->hwnd == hwnd)
+          if (onscreen->hwnd == hwnd)
             return COGL_ONSCREEN (framebuffer);
         }
     }
@@ -227,69 +207,6 @@ _cogl_winsys_renderer_connect (CoglRenderer *renderer,
   renderer->winsys = g_slice_new0 (CoglRendererWgl);
 
   return TRUE;
-}
-
-static LRESULT CALLBACK
-window_proc (HWND hwnd, UINT umsg,
-             WPARAM wparam, LPARAM lparam)
-{
-  gboolean message_handled = FALSE;
-  CoglOnscreen *onscreen;
-
-  /* It's not clear what the best thing to do with messages sent to
-     the window proc is. We want the application to forward on all
-     messages through Cogl so that it can have a chance to process
-     them which might mean that that in it's GetMessage loop it could
-     call cogl_win32_renderer_handle_event for every message. However
-     the message loop would usually call DispatchMessage as well which
-     mean this window proc would be invoked and Cogl would see the
-     message twice. However we can't just ignore messages in the
-     window proc because some messages are sent directly from windows
-     without going through the message queue. This function therefore
-     just forwards on all messages directly. This means that the
-     application is not expected to forward on messages if it has let
-     Cogl create the window itself because it will already see them
-     via the window proc. This limits the kinds of messages that Cogl
-     can handle to ones that are sent to the windows it creates, but I
-     think that is a reasonable restriction */
-
-  /* Convert the message to a MSG struct and pass it through the Cogl
-     message handling mechanism */
-
-  /* This window proc is only called for messages created with Cogl's
-     window class so we should be able to work out the corresponding
-     window class by looking in the extra window data. Windows will
-     send some extra messages before we get a chance to set this value
-     so we have to ignore these */
-  onscreen = (CoglOnscreen *) GetWindowLongPtr (hwnd, 0);
-
-  if (onscreen != NULL)
-    {
-      CoglRenderer *renderer;
-      DWORD message_pos;
-      MSG msg;
-
-      msg.hwnd = hwnd;
-      msg.message = umsg;
-      msg.wParam = wparam;
-      msg.lParam = lparam;
-      msg.time = GetMessageTime ();
-      /* Neither MAKE_POINTS nor GET_[XY]_LPARAM is defined in MinGW
-         headers so we need to convert to a signed type explicitly */
-      message_pos = GetMessagePos ();
-      msg.pt.x = (SHORT) LOWORD (message_pos);
-      msg.pt.y = (SHORT) HIWORD (message_pos);
-
-      renderer = COGL_FRAMEBUFFER (onscreen)->context->display->renderer;
-
-      message_handled =
-        cogl_win32_renderer_handle_event (renderer, &msg);
-    }
-
-  if (!message_handled)
-    return DefWindowProcW (hwnd, umsg, wparam, lparam);
-  else
-    return 0;
 }
 
 static gboolean
@@ -352,59 +269,6 @@ choose_pixel_format (HDC dc, PIXELFORMATDESCRIPTOR *pfd)
 }
 
 static gboolean
-create_window_class (CoglDisplay *display, GError **error)
-{
-  CoglDisplayWgl *wgl_display = display->winsys;
-  char *class_name_ascii, *src;
-  WCHAR *class_name_wchar, *dst;
-  WNDCLASSW wndclass;
-
-  /* We create a window class per display so that we have an
-     opportunity to clean up the class when the display is
-     destroyed */
-
-  /* Generate a unique name containing the address of the display */
-  class_name_ascii = g_strdup_printf ("CoglWindow0x%0*" G_GINTPTR_MODIFIER "x",
-                                      sizeof (guintptr) * 2,
-                                      (guintptr) display);
-  /* Convert it to WCHARs */
-  class_name_wchar = g_malloc ((strlen (class_name_ascii) + 1) *
-                               sizeof (WCHAR));
-  for (src = class_name_ascii, dst = class_name_wchar;
-       *src;
-       src++, dst++)
-    *dst = *src;
-  *dst = L'\0';
-
-  memset (&wndclass, 0, sizeof (wndclass));
-  wndclass.style = CS_DBLCLKS | CS_HREDRAW | CS_VREDRAW;
-  wndclass.lpfnWndProc = window_proc;
-  /* We reserve extra space in the window data for a pointer back to
-     the CoglOnscreen */
-  wndclass.cbWndExtra = sizeof (LONG_PTR);
-  wndclass.hInstance = GetModuleHandleW (NULL);
-  wndclass.hIcon = LoadIconW (NULL, (LPWSTR) IDI_APPLICATION);
-  wndclass.hCursor = LoadCursorW (NULL, (LPWSTR) IDC_ARROW);
-  wndclass.hbrBackground = NULL;
-  wndclass.lpszMenuName = NULL;
-  wndclass.lpszClassName = class_name_wchar;
-  wgl_display->window_class = RegisterClassW (&wndclass);
-
-  g_free (class_name_wchar);
-  g_free (class_name_ascii);
-
-  if (wgl_display->window_class == 0)
-    {
-      g_set_error (error, COGL_WINSYS_ERROR,
-                   COGL_WINSYS_ERROR_CREATE_CONTEXT,
-                   "Unable to register window class");
-      return FALSE;
-    }
-
-  return TRUE;
-}
-
-static gboolean
 create_context (CoglDisplay *display, GError **error)
 {
   CoglDisplayWgl *wgl_display = display->winsys;
@@ -419,7 +283,7 @@ create_context (CoglDisplay *display, GError **error)
   if (wgl_display->dummy_hwnd == NULL)
     {
       wgl_display->dummy_hwnd =
-        CreateWindowW ((LPWSTR) MAKEINTATOM (wgl_display->window_class),
+        CreateWindowW (NULL,
                        L".",
                        WS_OVERLAPPEDWINDOW,
                        CW_USEDEFAULT,
@@ -498,10 +362,6 @@ _cogl_winsys_display_destroy (CoglDisplay *display)
   if (wgl_display->dummy_hwnd)
     DestroyWindow (wgl_display->dummy_hwnd);
 
-  if (wgl_display->window_class)
-    UnregisterClassW ((LPWSTR) MAKEINTATOM (wgl_display->window_class),
-                      GetModuleHandleW (NULL));
-
   g_slice_free (CoglDisplayWgl, display->winsys);
   display->winsys = NULL;
 }
@@ -516,9 +376,6 @@ _cogl_winsys_display_setup (CoglDisplay *display,
 
   wgl_display = g_slice_new0 (CoglDisplayWgl);
   display->winsys = wgl_display;
-
-  if (!create_window_class (display, error))
-    goto error;
 
   if (!create_context (display, error))
     goto error;
@@ -679,7 +536,6 @@ _cogl_winsys_onscreen_deinit (CoglOnscreen *onscreen)
 {
   CoglContext *context = COGL_FRAMEBUFFER (onscreen)->context;
   CoglContextWgl *wgl_context = context->winsys;
-  CoglOnscreenWin32 *win32_onscreen = onscreen->winsys;
   CoglOnscreenWgl *wgl_onscreen = onscreen->winsys;
 
   /* If we never successfully allocated then there's nothing to do */
@@ -691,15 +547,7 @@ _cogl_winsys_onscreen_deinit (CoglOnscreen *onscreen)
       if (wgl_context->current_dc == wgl_onscreen->client_dc)
         _cogl_winsys_onscreen_bind (NULL);
 
-      ReleaseDC (win32_onscreen->hwnd, wgl_onscreen->client_dc);
-    }
-
-  if (!win32_onscreen->is_foreign_hwnd && win32_onscreen->hwnd)
-    {
-      /* Drop the pointer to the onscreen in the window so that any
-         further messages won't be processed */
-      SetWindowLongPtrW (win32_onscreen->hwnd, 0, (LONG_PTR) 0);
-      DestroyWindow (win32_onscreen->hwnd);
+      ReleaseDC (onscreen->hwnd, wgl_onscreen->client_dc);
     }
 
   g_slice_free (CoglOnscreenWgl, onscreen->winsys);
@@ -715,71 +563,22 @@ _cogl_winsys_onscreen_init (CoglOnscreen *onscreen,
   CoglDisplay *display = context->display;
   CoglDisplayWgl *wgl_display = display->winsys;
   CoglOnscreenWgl *wgl_onscreen;
-  CoglOnscreenWin32 *win32_onscreen;
   PIXELFORMATDESCRIPTOR pfd;
   int pf;
   HWND hwnd;
+  RECT client_rect;
 
   g_return_val_if_fail (wgl_display->wgl_context, FALSE);
 
-  /* XXX: Note we ignore the user's original width/height when given a
-   * foreign window. */
-  if (onscreen->foreign_hwnd)
-    {
-      RECT client_rect;
+  hwnd = onscreen->hwnd;
 
-      hwnd = onscreen->foreign_hwnd;
-
-      GetClientRect (hwnd, &client_rect);
-
-      _cogl_framebuffer_winsys_update_size (framebuffer,
-                                            client_rect.right,
-                                            client_rect.bottom);
-    }
-  else
-    {
-      int width, height;
-
-      width = COGL_FRAMEBUFFER (onscreen)->width;
-      height = COGL_FRAMEBUFFER (onscreen)->height;
-
-      /* The size of the window passed to CreateWindow for some reason
-         includes the window decorations so we need to compensate for
-         that */
-      width += GetSystemMetrics (SM_CXSIZEFRAME) * 2;
-      height += (GetSystemMetrics (SM_CYSIZEFRAME) * 2 +
-                 GetSystemMetrics (SM_CYCAPTION));
-
-      hwnd = CreateWindowW ((LPWSTR) MAKEINTATOM (wgl_display->window_class),
-                            L".",
-                            WS_OVERLAPPEDWINDOW,
-                            CW_USEDEFAULT, /* xpos */
-                            CW_USEDEFAULT, /* ypos */
-                            width,
-                            height,
-                            NULL, /* parent */
-                            NULL, /* menu */
-                            GetModuleHandle (NULL),
-                            NULL /* lparam for the WM_CREATE message */);
-
-      if (hwnd == NULL)
-        {
-          g_set_error (error, COGL_WINSYS_ERROR,
-                       COGL_WINSYS_ERROR_CREATE_ONSCREEN,
-                       "Unable to create window");
-          return FALSE;
-        }
-
-      /* Store a pointer back to the onscreen in the window extra data
-         so we can refer back to it quickly */
-      SetWindowLongPtrW (hwnd, 0, (LONG_PTR) onscreen);
-    }
+  GetClientRect (hwnd, &client_rect);
+  _cogl_framebuffer_winsys_update_size (framebuffer,
+					client_rect.right,
+					client_rect.bottom);
 
   onscreen->winsys = g_slice_new0 (CoglOnscreenWgl);
-  win32_onscreen = onscreen->winsys;
   wgl_onscreen = onscreen->winsys;
-
-  win32_onscreen->hwnd = hwnd;
 
   wgl_onscreen->client_dc = GetDC (hwnd);
 
@@ -823,20 +622,11 @@ _cogl_winsys_onscreen_update_swap_throttled (CoglOnscreen *onscreen)
   _cogl_winsys_onscreen_bind (onscreen);
 }
 
-static HWND
-_cogl_winsys_onscreen_win32_get_window (CoglOnscreen *onscreen)
-{
-  CoglOnscreenWin32 *win32_onscreen = onscreen->winsys;
-  return win32_onscreen->hwnd;
-}
-
 static void
 _cogl_winsys_onscreen_set_visibility (CoglOnscreen *onscreen,
                                       gboolean visibility)
 {
-  CoglOnscreenWin32 *win32_onscreen = onscreen->winsys;
-
-  ShowWindow (win32_onscreen->hwnd, visibility ? SW_SHOW : SW_HIDE);
+  ShowWindow (onscreen->hwnd, visibility ? SW_SHOW : SW_HIDE);
 }
 
 const CoglWinsysVtable *
@@ -870,7 +660,6 @@ _cogl_winsys_wgl_get_vtable (void)
       vtable.onscreen_update_swap_throttled =
         _cogl_winsys_onscreen_update_swap_throttled;
       vtable.onscreen_set_visibility = _cogl_winsys_onscreen_set_visibility;
-      vtable.onscreen_win32_get_window = _cogl_winsys_onscreen_win32_get_window;
 
       vtable_inited = TRUE;
     }

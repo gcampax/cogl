@@ -120,14 +120,6 @@ typedef struct _CoglWinsysVtable
   (*xlib_get_visual_info) (CoglDisplay *display);
 #endif
 
-  guint32
-  (*onscreen_x11_get_window_xid) (CoglOnscreen *onscreen);
-
-#ifdef COGL_HAS_WIN32_SUPPORT
-  HWND
-  (*onscreen_win32_get_window) (CoglOnscreen *onscreen);
-#endif
-
   unsigned int
   (*onscreen_add_swap_buffers_callback) (CoglOnscreen *onscreen,
                                          CoglSwapBuffersNotify callback,
