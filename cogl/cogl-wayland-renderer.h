@@ -57,6 +57,11 @@ cogl_wayland_renderer_set_foreign_compositor (CoglRenderer *renderer,
 struct wl_compositor *
 cogl_wayland_renderer_get_compositor (CoglRenderer *renderer);
 
+#define cogl_wayland_renderer_new cogl_wayland_renderer_new_EXP
+CoglRenderer *
+cogl_wayland_renderer_new (struct wl_display    *display,
+			   struct wl_compositor *compositor);
+
 G_END_DECLS
 
 #endif /* __COGL_WAYLAND_RENDERER_H__ */

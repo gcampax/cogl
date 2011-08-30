@@ -122,6 +122,10 @@ cogl_xlib_renderer_set_foreign_display (CoglRenderer *renderer,
 Display *
 cogl_xlib_renderer_get_display (CoglRenderer *renderer);
 
+#define cogl_xlib_renderer_new cogl_xlib_renderer_new_EXP
+CoglRenderer *
+cogl_xlib_renderer_new (Display *display);
+
 G_END_DECLS
 
 #endif /* __COGL_XLIB_RENDERER_H__ */

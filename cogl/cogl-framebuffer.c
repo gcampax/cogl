@@ -1687,9 +1687,24 @@ cogl_framebuffer_swap_region (CoglFramebuffer *framebuffer,
 }
 
 #ifdef COGL_HAS_X11_SUPPORT
+CoglOnscreen *
+cogl_x11_onscreen_foreign_new (CoglContext *context,
+			       Window       xid,
+			       CoglOnscreenX11MaskCallback update,
+			       void        *user_data)
+{
+  CoglOnscreen *onscreen = cogl_onscreen_new (context, -1, -1);
+
+  onscreen->foreign_xid = xid;
+  onscreen->foreign_update_mask_callback = update;
+  onscreen->foreign_update_mask_data = user_data;
+
+  return onscreen;
+}
+
 void
 cogl_x11_onscreen_set_foreign_window_xid (CoglOnscreen *onscreen,
-                                          guint32 xid,
+                                          Window xid,
                                           CoglOnscreenX11MaskCallback update,
                                           void *user_data)
 {
@@ -1739,7 +1754,34 @@ cogl_x11_onscreen_get_visual_xid (CoglOnscreen *onscreen)
 }
 #endif /* COGL_HAS_X11_SUPPORT */
 
+#ifdef COGL_HAS_EGL_PLATFORM_WAYLAND_SUPPORT
+CoglOnscreen *
+cogl_wayland_onscreen_foreign_new (CoglContext *context,
+				   struct wl_surface *surface,
+				   int width,
+				   int heigth)
+{
+  CoglOnscreen *onscreen = cogl_onscreen_new (context, width, heigth);
+
+  onscreen->foreign_surface = surface;
+
+  return onscreen;
+}
+#endif /* COGL_HAS_EGL_PLATFORM_WAYLAND_SUPPORT */
+
 #ifdef COGL_HAS_WIN32_SUPPORT
+
+CoglOnscreen *
+cogl_win32_onscreen_foreign_new (CoglContext *context,
+				 HWND hwnd)
+{
+  /* width and height are ignored */
+  CoglOnscreen *onscreen = cogl_onscreen_new (context, 1, 1);
+
+  onscreen->foreign_hwnd = hwnd;
+
+  return onscreen;
+}
 
 void
 cogl_win32_onscreen_set_foreign_window (CoglOnscreen *onscreen,

@@ -114,6 +114,32 @@ _cogl_renderer_free (CoglRenderer *renderer)
   g_free (renderer);
 }
 
+#ifdef COGL_HAS_XLIB_SUPPORT
+CoglRenderer *
+cogl_xlib_renderer_new (Display *display)
+{
+  CoglRenderer *renderer = cogl_renderer_new ();
+
+  renderer->foreign_xdpy = display;
+
+  return renderer;
+}
+#endif
+
+#ifdef COGL_HAS_EGL_PLATFORM_WAYLAND_SUPPORT
+CoglRenderer *
+cogl_wayland_renderer_new (struct wl_display    *display,
+			   struct wl_compositor *compositor)
+{
+  CoglRenderer *renderer = cogl_renderer_new ();
+
+  renderer->foreign_wayland_display = display;
+  renderer->foreign_wayland_compositor = compositor;
+  /* Force EGL, even if other winsys are available */
+  renderer->winsys_id_override = COGL_WINSYS_ID_EGL;
+}
+#endif
+
 CoglRenderer *
 cogl_renderer_new (void)
 {

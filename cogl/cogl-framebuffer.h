@@ -366,6 +366,24 @@ typedef void (*CoglOnscreenX11MaskCallback) (CoglOnscreen *onscreen,
                                              void *user_data);
 
 /**
+ * cogl_x11_onscreen_foreign_new:
+ * @context: a #CoglContext
+ * @xid: the XID of an existing X window
+ * @update: a callback for changing event mask. See
+ *          cogl_x11_onscreen_set_foreign_window_id() for further
+ *          description of this parameter.
+ * @data: user data for @update
+ *
+ * Creates a new #CoglOnscreen, targeting @xid for drawing and reading.
+ */
+#define cogl_x11_onscreen_foreign_new cogl_x11_onscreen_foreign_new_EXP
+CoglOnscreen *
+cogl_x11_onscreen_foreign_new (CoglContext *context,
+			       Window       xwindow,
+			       CoglOnscreenX11MaskCallback callback,
+			       void        *user_data);
+
+/**
  * cogl_x11_onscreen_set_foreign_window_xid:
  * @onscreen: The unallocated framebuffer to associated with an X
  *            window.
@@ -419,7 +437,7 @@ typedef void (*CoglOnscreenX11MaskCallback) (CoglOnscreen *onscreen,
   cogl_x11_onscreen_set_foreign_window_xid_EXP
 void
 cogl_x11_onscreen_set_foreign_window_xid (CoglOnscreen *onscreen,
-                                          guint32 xid,
+                                          Window xid,
                                           CoglOnscreenX11MaskCallback update,
                                           void *user_data);
 
@@ -433,6 +451,11 @@ cogl_x11_onscreen_get_visual_xid (CoglOnscreen *onscreen);
 #endif /* COGL_HAS_X11 */
 
 #ifdef COGL_HAS_WIN32_SUPPORT
+#define cogl_win32_onscreen_foreign_new cogl_win32_onscreen_foreign_new_EXP
+CoglOnscreen *
+cogl_win32_onscreen_foreign_new (CoglContext *context,
+				 HWND hwnd);
+
 #define cogl_win32_onscreen_set_foreign_window \
   cogl_win32_onscreen_set_foreign_window_EXP
 void
@@ -445,6 +468,13 @@ cogl_win32_onscreen_get_window (CoglOnscreen *onscreen);
 #endif /* COGL_HAS_WIN32_SUPPORT */
 
 #if defined (COGL_HAS_EGL_PLATFORM_WAYLAND_SUPPORT)
+#define cogl_wayland_onscreen_foreign_new cogl_wayland_onscreen_foreign_new_EXP
+CoglOnscreen *
+cogl_wayland_onscreen_foreign_new (CoglContext *context,
+				   struct wl_surface *surface,
+				   int width,
+				   int height);
+
 struct wl_surface *
 cogl_wayland_onscreen_get_surface (CoglOnscreen *onscreen);
 #endif /* COGL_HAS_EGL_PLATFORM_WAYLAND_SUPPORT */

@@ -167,6 +167,7 @@ typedef struct _CoglOnscreenEGL
 #ifdef COGL_HAS_EGL_PLATFORM_WAYLAND_SUPPORT
   struct wl_egl_window *wayland_egl_native_window;
   struct wl_surface *wayland_surface;
+  gboolean is_foreign_wl_surface;
 #endif
 
   EGLSurface egl_surface;
@@ -1340,8 +1341,18 @@ _cogl_winsys_onscreen_init (CoglOnscreen *onscreen,
                             NULL);
 #elif defined (COGL_HAS_EGL_PLATFORM_WAYLAND_SUPPORT)
 
-  egl_onscreen->wayland_surface =
-    wl_compositor_create_surface (egl_renderer->wayland_compositor);
+  if (onscreen->foreign_surface)
+    {
+      egl_onscreen->wayland_surface = onscreen->foreign_surface;
+      egl_onscreen->is_foreign_wl_surface = TRUE;
+    }
+  else
+    {
+      egl_onscreen->wayland_surface =
+	wl_compositor_create_surface (egl_renderer->wayland_compositor);
+      egl_onscreen->is_foreign_wl_surface = FALSE;
+    }
+
   if (!egl_onscreen->wayland_surface)
     {
       g_set_error (error, COGL_WINSYS_ERROR,
@@ -1455,7 +1466,7 @@ _cogl_winsys_onscreen_deinit (CoglOnscreen *onscreen)
       egl_onscreen->wayland_egl_native_window = NULL;
     }
 
-  if (egl_onscreen->wayland_surface)
+  if (egl_onscreen->wayland_surface && !egl_onscreen->is_foreign_wl_surface)
     {
       wl_surface_destroy (egl_onscreen->wayland_surface);
       egl_onscreen->wayland_surface = NULL;
