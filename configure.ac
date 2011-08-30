@@ -811,6 +811,24 @@ AM_CONDITIONAL(X11_TESTS, [test "x$SUPPORT_X11" = "xyes"])
 AM_CONDITIONAL(SUPPORT_X11, [test "x$SUPPORT_X11" = "xyes"])
 AM_CONDITIONAL(SUPPORT_XLIB, [test "x$SUPPORT_XLIB" = "xyes"])
 
+dnl ================================================================
+dnl Check if we can build the Gdk example
+dnl ================================================================
+AC_MSG_CHECKING([for gdk examples])
+PKG_CHECK_EXISTS([gdk-3.0],
+                 [
+                  HAVE_GDK=yes
+                  PKG_CHECK_MODULES(GDK, [gdk-3.0])
+                  AC_MSG_RESULT([yes])
+                 ],
+                 [AC_MSG_RESULT([no])])
+AM_CONDITIONAL(HAVE_GDK_EXAMPLE, [test "x$HAVE_GDK" = "xyes"])
+
+dnl the other example requires a native EGL platform
+AM_CONDITIONAL(HAVE_EGL_EXAMPLE,
+  [test "x$enable_android_egl_plaform" = "xyes" ||
+   test "x$enable_gdl_egl_platform" = "xyes" ||
+   test "x$enable_null_egl_platform" = "xyes"])
 
 dnl ================================================================
 dnl Compiler stuff.

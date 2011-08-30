@@ -131,9 +131,9 @@ main (int argc, char **argv)
 
   XFree (xvisinfo);
 
-  onscreen = cogl_xlib_onscreen_foreign_new (ctx, xwin,
-					     update_cogl_x11_event_mask,
-					     xdpy);
+  onscreen = cogl_xlib_onscreen_new (ctx, xwin,
+				     update_cogl_x11_event_mask,
+				     xdpy);
 
   fb = COGL_FRAMEBUFFER (onscreen);
   /* Eventually there will be an implicit allocate on first use so this

@@ -20,16 +20,23 @@ common_ldadd = \
 	$(COGL_DEP_LIBS) \
 	$(top_builddir)/cogl/libcogl.la
 
-noinst_PROGRAMS = hello
+noinst_PROGRAMS = 
 
-hello_SOURCES = hello.c
-hello_LDADD = $(common_ldadd)
+if HAVE_GDK_EXAMPLE
+noinst_PROGRAMS += gdk-cogl
+
+gdk_cogl_SOURCES = gdk-cogl.c
+gdk_cogl_CFLAGS = $(GDK_CFLAGS) $(AM_CFLAGS) $(AM_CPPFLAGS)
+gdk_cogl_LDADD = $(GDK_LIBS) $(common_ldadd)
+endif
 
 if BUILD_COGL_PANGO
+if HAVE_EGL_EXAMPLE
 noinst_PROGRAMS += crate
 crate_SOURCES = crate.c
 crate_LDADD = $(common_ldadd) $(top_builddir)/cogl-pango/libcogl-pango.la
 crate_CFLAGS = $(AM_CFLAGS) $(COGL_PANGO_DEP_CFLAGS)
+endif
 endif
 
 if X11_TESTS
