@@ -1609,22 +1609,18 @@ _cogl_winsys_onscreen_update_swap_throttled (CoglOnscreen *onscreen)
 }
 
 #ifdef COGL_HAS_EGL_PLATFORM_POWERVR_X11_SUPPORT
-/* XXX: This is a particularly hacky _cogl_winsys interface... */
 static XVisualInfo *
-_cogl_winsys_xlib_get_visual_info (void)
+_cogl_winsys_xlib_get_visual_info (CoglDisplay *display)
 {
-  CoglDisplayEGL *egl_display;
+  if (display->winsys == NULL)
+    return NULL;
 
-  _COGL_GET_CONTEXT (ctx, NULL);
-
-  g_return_val_if_fail (ctx->display->winsys, FALSE);
-
-  egl_display = ctx->display->winsys;
+  egl_display = display->winsys;
 
   if (!egl_display->found_egl_config)
     return NULL;
 
-  return get_visual_info (ctx->display, egl_display->egl_config);
+  return get_visual_info (display, egl_display->egl_config);
 }
 #endif
 
@@ -1801,21 +1797,6 @@ _cogl_winsys_egl_get_vtable (void)
   return &_cogl_winsys_vtable;
 }
 
-/* FIXME: we should have a separate wayland file for these entry
- * points... */
-#ifdef COGL_HAS_EGL_PLATFORM_WAYLAND_SUPPORT
-void
-cogl_wayland_renderer_set_foreign_display (CoglRenderer *renderer,
-                                           struct wl_display *display)
-{
-  g_return_if_fail (cogl_is_renderer (renderer));
-
-  /* NB: Renderers are considered immutable once connected */
-  g_return_if_fail (!renderer->connected);
-
-  renderer->foreign_wayland_display = display;
-}
-
 struct wl_display *
 cogl_wayland_renderer_get_display (CoglRenderer *renderer)
 {
@@ -1830,18 +1811,6 @@ cogl_wayland_renderer_get_display (CoglRenderer *renderer)
     }
   else
     return NULL;
-}
-
-void
-cogl_wayland_renderer_set_foreign_compositor (CoglRenderer *renderer,
-                                              struct wl_compositor *compositor)
-{
-  g_return_if_fail (cogl_is_renderer (renderer));
-
-  /* NB: Renderers are considered immutable once connected */
-  g_return_if_fail (!renderer->connected);
-
-  renderer->foreign_wayland_compositor = compositor;
 }
 
 struct wl_compositor *

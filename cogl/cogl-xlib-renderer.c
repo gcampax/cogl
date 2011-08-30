@@ -129,7 +129,7 @@ _cogl_xlib_renderer_untrap_errors (CoglRenderer *renderer,
 static Display *
 assert_xlib_display (CoglRenderer *renderer, GError **error)
 {
-  Display *xdpy = cogl_xlib_renderer_get_foreign_display (renderer);
+  Display *xdpy = renderer->foreign_xdpy;
   CoglXlibRenderer *xlib_renderer = renderer->winsys;
 
   /* A foreign display may have already been set... */

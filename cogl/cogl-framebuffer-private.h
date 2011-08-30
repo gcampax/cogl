@@ -65,6 +65,7 @@ struct _CoglFramebuffer
   float               viewport_y;
   float               viewport_width;
   float               viewport_height;
+  gboolean            is_custom_viewport;
 
   CoglClipState       clip_state;
 

@@ -207,6 +207,8 @@ glx_event_filter_cb (XEvent *xevent, void *data)
                                                 xevent->xconfigure.height);
         }
 
+      COGL_NOTE (WINSYS, "ConfigureNotify received");
+
       /* we let ConfigureNotify pass through */
       return COGL_FILTER_CONTINUE;
     }
@@ -1412,21 +1414,19 @@ _cogl_winsys_onscreen_set_visibility (CoglOnscreen *onscreen,
     XUnmapWindow (xlib_renderer->xdpy, xlib_onscreen->xwin);
 }
 
-/* XXX: This is a particularly hacky _cogl_winsys interface... */
 static XVisualInfo *
-_cogl_winsys_xlib_get_visual_info (void)
+_cogl_winsys_xlib_get_visual_info (CoglDisplay *display)
 {
   CoglGLXDisplay *glx_display;
   CoglXlibRenderer *xlib_renderer;
   CoglGLXRenderer *glx_renderer;
 
-  _COGL_GET_CONTEXT (ctx, NULL);
+  if (display->winsys == NULL)
+    return NULL;
 
-  g_return_val_if_fail (ctx->display->winsys, FALSE);
-
-  glx_display = ctx->display->winsys;
-  xlib_renderer = ctx->display->renderer->winsys;
-  glx_renderer = ctx->display->renderer->winsys;
+  glx_display = display->winsys;
+  xlib_renderer = display->renderer->winsys;
+  glx_renderer = display->renderer->winsys;
 
   if (!glx_display->found_fbconfig)
     return NULL;

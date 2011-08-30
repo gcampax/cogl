@@ -158,3 +158,17 @@ cogl_wayland_display_set_compositor_display (CoglDisplay *display,
   display->wayland_compositor_display = wayland_display;
 }
 #endif
+
+#ifdef COGL_HAS_XLIB_SUPPORT
+XVisualInfo *
+cogl_xlib_display_get_visual_info (CoglDisplay *display)
+{
+  const CoglWinsysVtable *winsys;
+
+  winsys = _cogl_display_get_winsys (display);
+
+  g_return_val_if_fail (winsys->xlib_get_visual_info != NULL, NULL);
+
+  return winsys->xlib_get_visual_info (display);
+}
+#endif

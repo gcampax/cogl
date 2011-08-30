@@ -30,7 +30,7 @@ update_cogl_x11_event_mask (CoglOnscreen *onscreen,
   guint32 xwin;
 
   attrs.event_mask = event_mask | X11_FOREIGN_EVENT_MASK;
-  xwin = cogl_x11_onscreen_get_window_xid (onscreen);
+  xwin = cogl_xlib_onscreen_get_window_xid (onscreen);
 
   XChangeWindowAttributes (xdpy,
                            (Window)xwin,
@@ -51,9 +51,7 @@ main (int argc, char **argv)
   CoglOnscreen *onscreen;
   CoglFramebuffer *fb;
   GError *error = NULL;
-  guint32 visual;
-  XVisualInfo template, *xvisinfo;
-  int visinfos_count;
+  XVisualInfo *xvisinfo;
   XSetWindowAttributes xattr;
   unsigned long mask;
   Window xwin;
@@ -89,10 +87,8 @@ main (int argc, char **argv)
     }
 
   /* Conceptually choose a GPU... */
-  renderer = cogl_renderer_new ();
-  /* FIXME: This should conceptually be part of the configuration of
-   * a renderer. */
-  cogl_xlib_renderer_set_foreign_display (renderer, xdpy);
+  renderer = cogl_xlib_renderer_new (xdpy);
+
   if (!cogl_renderer_connect (renderer, &error))
     {
       fprintf (stderr, "Failed to connect to a renderer: %s\n",
@@ -126,20 +122,15 @@ main (int argc, char **argv)
       return 1;
     }
 
-  onscreen = cogl_onscreen_new (ctx, 640, 480);
-
   /* We want to test that Cogl can handle foreign X windows... */
 
-  visual = cogl_x11_onscreen_get_visual_xid (onscreen);
-  if (!visual)
+  xvisinfo = cogl_xlib_display_get_visual_info (display);
+  if (!xvisinfo)
     {
       fprintf (stderr, "Failed to query an X visual suitable for the "
                "configured CoglOnscreen framebuffer\n");
       return 1;
     }
-
-  template.visualid = visual;
-  xvisinfo = XGetVisualInfo (xdpy, VisualIDMask, &template, &visinfos_count);
 
   /* window attributes */
   xattr.background_pixel = WhitePixel (xdpy, DefaultScreen (xdpy));
@@ -162,9 +153,9 @@ main (int argc, char **argv)
 
   XFree (xvisinfo);
 
-  cogl_x11_onscreen_set_foreign_window_xid (onscreen, xwin,
-                                            update_cogl_x11_event_mask,
-                                            xdpy);
+  onscreen = cogl_xlib_onscreen_foreign_new (ctx, xwin,
+					     update_cogl_x11_event_mask,
+					     xdpy);
 
   fb = COGL_FRAMEBUFFER (onscreen);
   /* Eventually there will be an implicit allocate on first use so this

@@ -34,11 +34,16 @@
 #include <cogl/cogl-renderer.h>
 #include <cogl/cogl-onscreen-template.h>
 
-G_BEGIN_DECLS
-
 #ifdef COGL_HAS_EGL_PLATFORM_GDL_SUPPORT
 #include <libgdl.h>
 #endif
+
+#ifdef COGL_HAS_XLIB_SUPPORT
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#endif
+
+G_BEGIN_DECLS
 
 /**
  * SECTION:cogl-display
@@ -98,6 +103,13 @@ cogl_gdl_display_set_plane (CoglDisplay *display,
 void
 cogl_wayland_display_set_compositor_display (CoglDisplay *display,
                                           struct wl_display *wayland_display);
+#endif
+
+#ifdef COGL_HAS_XLIB_SUPPORT
+#define cogl_xlib_display_get_visual_info \
+  cogl_xlib_display_get_visual_info_EXP
+XVisualInfo *
+cogl_xlib_display_get_visual_info (CoglDisplay *display);
 #endif
 
 G_END_DECLS

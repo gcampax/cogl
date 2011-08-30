@@ -35,22 +35,10 @@
 
 G_BEGIN_DECLS
 
-#define cogl_wayland_renderer_set_foreign_display \
-  cogl_wayland_renderer_set_foreign_display_EXP
-void
-cogl_wayland_renderer_set_foreign_display (CoglRenderer *renderer,
-                                           struct wl_display *display);
-
 #define cogl_wayland_renderer_get_display \
   cogl_wayland_renderer_get_display_EXP
 struct wl_display *
 cogl_wayland_renderer_get_display (CoglRenderer *renderer);
-
-#define cogl_wayland_renderer_set_foreign_compositor \
-  cogl_wayland_renderer_set_foreign_compositor_EXP
-void
-cogl_wayland_renderer_set_foreign_compositor (CoglRenderer *renderer,
-                                              struct wl_compositor *compositor);
 
 #define cogl_wayland_renderer_get_compositor \
   cogl_wayland_renderer_get_compositor_EXP

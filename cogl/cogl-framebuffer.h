@@ -366,36 +366,13 @@ typedef void (*CoglOnscreenX11MaskCallback) (CoglOnscreen *onscreen,
                                              void *user_data);
 
 /**
- * cogl_x11_onscreen_foreign_new:
+ * cogl_xlib_onscreen_foreign_new:
  * @context: a #CoglContext
  * @xid: the XID of an existing X window
- * @update: a callback for changing event mask. See
- *          cogl_x11_onscreen_set_foreign_window_id() for further
- *          description of this parameter.
+ * @update: a callback for changing event mask.
  * @data: user data for @update
  *
  * Creates a new #CoglOnscreen, targeting @xid for drawing and reading.
- */
-#define cogl_x11_onscreen_foreign_new cogl_x11_onscreen_foreign_new_EXP
-CoglOnscreen *
-cogl_x11_onscreen_foreign_new (CoglContext *context,
-			       Window       xwindow,
-			       CoglOnscreenX11MaskCallback callback,
-			       void        *user_data);
-
-/**
- * cogl_x11_onscreen_set_foreign_window_xid:
- * @onscreen: The unallocated framebuffer to associated with an X
- *            window.
- * @xid: The XID of an existing X window
- * @update: A callback that notifies of updates to what Cogl requires
- *          to be in the core X protocol event mask.
- *
- * Ideally we would recommend that you let Cogl be responsible for
- * creating any X window required to back an onscreen framebuffer but
- * if you really need to target a window created manually this
- * function can be called before @onscreen has been allocated to set a
- * foreign XID for your existing X window.
  *
  * Since Cogl needs, for example, to track changes to the size of an X
  * window it requires that certain events be selected for via the core
@@ -422,45 +399,35 @@ cogl_x11_onscreen_foreign_new (CoglContext *context,
  *
  * {
  *   *snip*
- *   cogl_x11_onscreen_set_foreign_window_xid (onscreen,
- *                                             data->xwin,
- *                                             my_update_cogl_x11_event_mask,
- *                                             data);
+ *   data->onscreen = cogl_xlib_onscreen_foreign_new (context,
+ *                                                    data->xwin,
+ *                                                    my_update_cogl_x11_event_mask,
+ *                                                    data);
  *   *snip*
  * }
  * }]
- *
- * Since: 2.0
- * Stability: Unstable
  */
-#define cogl_x11_onscreen_set_foreign_window_xid \
-  cogl_x11_onscreen_set_foreign_window_xid_EXP
-void
-cogl_x11_onscreen_set_foreign_window_xid (CoglOnscreen *onscreen,
-                                          Window xid,
-                                          CoglOnscreenX11MaskCallback update,
-                                          void *user_data);
+#define cogl_xlib_onscreen_foreign_new cogl_xlib_onscreen_foreign_new_EXP
+CoglOnscreen *
+cogl_xlib_onscreen_foreign_new (CoglContext *context,
+				Window       xwindow,
+				CoglOnscreenX11MaskCallback callback,
+				void        *user_data);
 
-#define cogl_x11_onscreen_get_window_xid cogl_x11_onscreen_get_window_xid_EXP
+#define cogl_xlib_onscreen_get_window_xid cogl_xlib_onscreen_get_window_xid_EXP
 guint32
-cogl_x11_onscreen_get_window_xid (CoglOnscreen *onscreen);
+cogl_xlib_onscreen_get_window_xid (CoglOnscreen *onscreen);
 
-#define cogl_x11_onscreen_get_visual_xid cogl_x11_onscreen_get_visual_xid_EXP
+#define cogl_xlib_onscreen_get_visual_xid cogl_xlib_onscreen_get_visual_xid_EXP
 guint32
-cogl_x11_onscreen_get_visual_xid (CoglOnscreen *onscreen);
+cogl_xlib_onscreen_get_visual_xid (CoglOnscreen *onscreen);
 #endif /* COGL_HAS_X11 */
 
 #ifdef COGL_HAS_WIN32_SUPPORT
 #define cogl_win32_onscreen_foreign_new cogl_win32_onscreen_foreign_new_EXP
 CoglOnscreen *
 cogl_win32_onscreen_foreign_new (CoglContext *context,
-				 HWND hwnd);
-
-#define cogl_win32_onscreen_set_foreign_window \
-  cogl_win32_onscreen_set_foreign_window_EXP
-void
-cogl_win32_onscreen_set_foreign_window (CoglOnscreen *onscreen,
-                                        HWND hwnd);
+				 HWND         hwnd);
 
 #define cogl_win32_onscreen_get_window cogl_win32_onscreen_get_window_EXP
 HWND

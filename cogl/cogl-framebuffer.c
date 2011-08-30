@@ -516,6 +516,10 @@ cogl_framebuffer_set_viewport (CoglFramebuffer *framebuffer,
 
   if (framebuffer->context && cogl_get_draw_framebuffer () == framebuffer)
     framebuffer->context->dirty_gl_viewport = TRUE;
+
+  /* Mark that this viewport was set explicitly (will no longer be
+     updated by changes in the underlying window size) */
+  framebuffer->is_custom_viewport = TRUE;
 }
 
 float
@@ -1061,6 +1065,12 @@ _cogl_framebuffer_winsys_update_size (CoglFramebuffer *framebuffer,
 
   framebuffer->width = width;
   framebuffer->height = height;
+
+  if (!framebuffer->is_custom_viewport)
+    {
+      framebuffer->viewport_width = width;
+      framebuffer->viewport_height = height;
+    }
 
   /* We'll need to recalculate the GL viewport state derived
    * from the Cogl viewport */
@@ -1688,12 +1698,18 @@ cogl_framebuffer_swap_region (CoglFramebuffer *framebuffer,
 
 #ifdef COGL_HAS_X11_SUPPORT
 CoglOnscreen *
-cogl_x11_onscreen_foreign_new (CoglContext *context,
-			       Window       xid,
-			       CoglOnscreenX11MaskCallback update,
-			       void        *user_data)
+cogl_xlib_onscreen_foreign_new (CoglContext *context,
+				Window       xid,
+				CoglOnscreenX11MaskCallback update,
+				void        *user_data)
 {
-  CoglOnscreen *onscreen = cogl_onscreen_new (context, -1, -1);
+  CoglOnscreen *onscreen;
+
+  /* We don't wan't applications to get away with being lazy here and not
+   * passing an update callback... */
+  g_return_val_if_fail (update != NULL, NULL);
+
+  onscreen = cogl_onscreen_new (context, -1, -1);
 
   onscreen->foreign_xid = xid;
   onscreen->foreign_update_mask_callback = update;
@@ -1702,23 +1718,8 @@ cogl_x11_onscreen_foreign_new (CoglContext *context,
   return onscreen;
 }
 
-void
-cogl_x11_onscreen_set_foreign_window_xid (CoglOnscreen *onscreen,
-                                          Window xid,
-                                          CoglOnscreenX11MaskCallback update,
-                                          void *user_data)
-{
-  /* We don't wan't applications to get away with being lazy here and not
-   * passing an update callback... */
-  g_return_if_fail (update);
-
-  onscreen->foreign_xid = xid;
-  onscreen->foreign_update_mask_callback = update;
-  onscreen->foreign_update_mask_data = user_data;
-}
-
 guint32
-cogl_x11_onscreen_get_window_xid (CoglOnscreen *onscreen)
+cogl_xlib_onscreen_get_window_xid (CoglOnscreen *onscreen)
 {
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
 
@@ -1736,17 +1737,13 @@ cogl_x11_onscreen_get_window_xid (CoglOnscreen *onscreen)
 }
 
 guint32
-cogl_x11_onscreen_get_visual_xid (CoglOnscreen *onscreen)
+cogl_xlib_onscreen_get_visual_xid (CoglOnscreen *onscreen)
 {
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
-  const CoglWinsysVtable *winsys = _cogl_framebuffer_get_winsys (framebuffer);
   XVisualInfo *visinfo;
   guint32 id;
 
-  /* This should only be called for xlib based onscreens */
-  g_return_val_if_fail (winsys->xlib_get_visual_info != NULL, 0);
-
-  visinfo = winsys->xlib_get_visual_info ();
+  visinfo = cogl_xlib_display_get_visual_info (framebuffer->context->display);
   id = (guint32)visinfo->visualid;
 
   XFree (visinfo);
@@ -1781,13 +1778,6 @@ cogl_win32_onscreen_foreign_new (CoglContext *context,
   onscreen->foreign_hwnd = hwnd;
 
   return onscreen;
-}
-
-void
-cogl_win32_onscreen_set_foreign_window (CoglOnscreen *onscreen,
-                                        HWND hwnd)
-{
-  onscreen->foreign_hwnd = hwnd;
 }
 
 HWND

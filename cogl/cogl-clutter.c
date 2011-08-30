@@ -78,6 +78,6 @@ cogl_clutter_winsys_xlib_get_visual_info (void)
   /* This should only be called for xlib contexts */
   g_return_val_if_fail (winsys->xlib_get_visual_info != NULL, NULL);
 
-  return winsys->xlib_get_visual_info ();
+  return winsys->xlib_get_visual_info (ctx->display);
 }
 #endif

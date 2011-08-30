@@ -117,7 +117,7 @@ typedef struct _CoglWinsysVtable
 
 #ifdef COGL_HAS_XLIB_SUPPORT
   XVisualInfo *
-  (*xlib_get_visual_info) (void);
+  (*xlib_get_visual_info) (CoglDisplay *display);
 #endif
 
   guint32

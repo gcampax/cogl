@@ -153,28 +153,6 @@ cogl_renderer_new (void)
   return _cogl_renderer_object_new (renderer);
 }
 
-#if COGL_HAS_XLIB_SUPPORT
-void
-cogl_xlib_renderer_set_foreign_display (CoglRenderer *renderer,
-                                        Display *xdisplay)
-{
-  g_return_if_fail (cogl_is_renderer (renderer));
-
-  /* NB: Renderers are considered immutable once connected */
-  g_return_if_fail (!renderer->connected);
-
-  renderer->foreign_xdpy = xdisplay;
-}
-
-Display *
-cogl_xlib_renderer_get_foreign_display (CoglRenderer *renderer)
-{
-  g_return_val_if_fail (cogl_is_renderer (renderer), NULL);
-
-  return renderer->foreign_xdpy;
-}
-#endif /* COGL_HAS_XLIB_SUPPORT */
-
 gboolean
 cogl_renderer_check_onscreen_template (CoglRenderer *renderer,
                                        CoglOnscreenTemplate *onscreen_template,
