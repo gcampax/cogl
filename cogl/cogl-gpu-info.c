@@ -204,6 +204,12 @@ check_sandybridge_architecture (const CoglGpuInfoStrings *strings)
 }
 
 static CoglBool
+check_ivybridge_architecture (const CoglGpuInfoStrings *strings)
+{
+  return match_phrase (strings->renderer_string, "Ivybridge");
+}
+
+static CoglBool
 check_llvmpipe_architecture (const CoglGpuInfoStrings *strings)
 {
   return match_phrase (strings->renderer_string, "llvmpipe");
@@ -249,6 +255,13 @@ intel_architectures[] =
       COGL_GPU_INFO_ARCHITECTURE_FLAG_VERTEX_IMMEDIATE_MODE |
         COGL_GPU_INFO_ARCHITECTURE_FLAG_FRAGMENT_IMMEDIATE_MODE,
       check_sandybridge_architecture
+    },
+    {
+      COGL_GPU_INFO_ARCHITECTURE_IVYBRIDGE,
+      "Ivybridge",
+      COGL_GPU_INFO_ARCHITECTURE_FLAG_VERTEX_IMMEDIATE_MODE |
+        COGL_GPU_INFO_ARCHITECTURE_FLAG_FRAGMENT_IMMEDIATE_MODE,
+      check_ivybridge_architecture
     },
     {
       COGL_GPU_INFO_ARCHITECTURE_UNKNOWN,

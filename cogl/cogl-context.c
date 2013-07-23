@@ -256,7 +256,8 @@ cogl_context_new (CoglDisplay *display,
    * TODO: file a bug upstream!
    */
   if (context->gpu.driver_package == COGL_GPU_INFO_DRIVER_PACKAGE_MESA &&
-      context->gpu.architecture == COGL_GPU_INFO_ARCHITECTURE_SANDYBRIDGE &&
+      (context->gpu.architecture == COGL_GPU_INFO_ARCHITECTURE_SANDYBRIDGE ||
+       context->gpu.architecture == COGL_GPU_INFO_ARCHITECTURE_IVYBRIDGE) &&
       !getenv ("COGL_DISABLE_INTEL_VIEWPORT_SCISSORT_WORKAROUND"))
     context->needs_viewport_scissor_workaround = TRUE;
   else
